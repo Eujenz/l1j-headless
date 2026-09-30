@@ -1,0 +1,385 @@
+{
+  "contract_schema": "1.0",
+  "scenario_id": "002",
+  "fixture_version": 1,
+  "source": "INSTRUMENTED_LEGACY_REFERENCE + MODERN_DESIGN",
+  "scope": "scenario_002",
+  "map": {
+    "map_id": 999,
+    "loc_x1": 33000,
+    "loc_y1": 33000,
+    "width": 5,
+    "height": 5,
+    "tiles": [
+      {
+        "x": 33000,
+        "y": 33000,
+        "val": 1,
+        "east": true,
+        "north": false
+      },
+      {
+        "x": 33001,
+        "y": 33000,
+        "val": 1,
+        "east": true,
+        "north": false
+      },
+      {
+        "x": 33002,
+        "y": 33000,
+        "val": 2,
+        "east": false,
+        "north": true
+      },
+      {
+        "x": 33003,
+        "y": 33000,
+        "val": 1,
+        "east": true,
+        "north": false
+      },
+      {
+        "x": 33004,
+        "y": 33000,
+        "val": 0,
+        "east": false,
+        "north": false
+      },
+      {
+        "x": 33000,
+        "y": 33001,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33001,
+        "y": 33001,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33002,
+        "y": 33001,
+        "val": 2,
+        "east": false,
+        "north": true
+      },
+      {
+        "x": 33003,
+        "y": 33001,
+        "val": 0,
+        "east": false,
+        "north": false
+      },
+      {
+        "x": 33004,
+        "y": 33001,
+        "val": 2,
+        "east": false,
+        "north": true
+      },
+      {
+        "x": 33000,
+        "y": 33002,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33001,
+        "y": 33002,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33002,
+        "y": 33002,
+        "val": 2,
+        "east": false,
+        "north": true
+      },
+      {
+        "x": 33003,
+        "y": 33002,
+        "val": 0,
+        "east": false,
+        "north": false
+      },
+      {
+        "x": 33004,
+        "y": 33002,
+        "val": 2,
+        "east": false,
+        "north": true
+      },
+      {
+        "x": 33000,
+        "y": 33003,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33001,
+        "y": 33003,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33002,
+        "y": 33003,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33003,
+        "y": 33003,
+        "val": 1,
+        "east": true,
+        "north": false
+      },
+      {
+        "x": 33004,
+        "y": 33003,
+        "val": 2,
+        "east": false,
+        "north": true
+      },
+      {
+        "x": 33000,
+        "y": 33004,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33001,
+        "y": 33004,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33002,
+        "y": 33004,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33003,
+        "y": 33004,
+        "val": 3,
+        "east": true,
+        "north": true
+      },
+      {
+        "x": 33004,
+        "y": 33004,
+        "val": 2,
+        "east": false,
+        "north": true
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "case_id": 1,
+      "name": "East_Success",
+      "type": "COLLISION",
+      "x": 33001,
+      "y": 33001,
+      "dir": 2,
+      "expected_passable": true,
+      "desc": "Straight East"
+    },
+    {
+      "case_id": 2,
+      "name": "West_Success",
+      "type": "COLLISION",
+      "x": 33002,
+      "y": 33001,
+      "dir": 6,
+      "expected_passable": true,
+      "desc": "Straight West"
+    },
+    {
+      "case_id": 3,
+      "name": "North_Success",
+      "type": "COLLISION",
+      "x": 33001,
+      "y": 33002,
+      "dir": 0,
+      "expected_passable": true,
+      "desc": "Straight North"
+    },
+    {
+      "case_id": 4,
+      "name": "South_Success",
+      "type": "COLLISION",
+      "x": 33001,
+      "y": 33001,
+      "dir": 4,
+      "expected_passable": true,
+      "desc": "Straight South"
+    },
+    {
+      "case_id": 5,
+      "name": "NE_Diagonal",
+      "type": "COLLISION",
+      "x": 33001,
+      "y": 33002,
+      "dir": 1,
+      "expected_passable": true,
+      "desc": "Diagonal NE"
+    },
+    {
+      "case_id": 6,
+      "name": "SE_Diagonal",
+      "type": "COLLISION",
+      "x": 33000,
+      "y": 33000,
+      "dir": 3,
+      "expected_passable": true,
+      "desc": "Diagonal SE open"
+    },
+    {
+      "case_id": 7,
+      "name": "SW_Diagonal",
+      "type": "COLLISION",
+      "x": 33002,
+      "y": 33000,
+      "dir": 5,
+      "expected_passable": true,
+      "desc": "Diagonal SW open"
+    },
+    {
+      "case_id": 8,
+      "name": "NW_Diagonal",
+      "type": "COLLISION",
+      "x": 33002,
+      "y": 33002,
+      "dir": 7,
+      "expected_passable": true,
+      "desc": "Diagonal NW open"
+    },
+    {
+      "case_id": 9,
+      "name": "Static_Blocked",
+      "type": "COLLISION",
+      "x": 33002,
+      "y": 33001,
+      "dir": 2,
+      "expected_passable": false,
+      "desc": "East into wall"
+    },
+    {
+      "case_id": 10,
+      "name": "Out_Of_Bounds",
+      "type": "COLLISION",
+      "x": 33000,
+      "y": 33000,
+      "dir": 0,
+      "expected_passable": false,
+      "desc": "North out of bounds"
+    },
+    {
+      "case_id": 11,
+      "name": "Diagonal_Corner_Blocked",
+      "type": "COLLISION",
+      "x": 33002,
+      "y": 33000,
+      "dir": 3,
+      "expected_passable": false,
+      "desc": "SE both routes blocked"
+    },
+    {
+      "case_id": 12,
+      "name": "Diagonal_Alt_Route_Available",
+      "type": "COLLISION",
+      "x": 33000,
+      "y": 33001,
+      "dir": 3,
+      "expected_passable": true,
+      "desc": "SE one route open"
+    },
+    {
+      "case_id": 13,
+      "name": "GoTo_Direct",
+      "type": "NAVIGATION",
+      "start": {
+        "x": 33000,
+        "y": 33004
+      },
+      "target": {
+        "x": 33003,
+        "y": 33004
+      },
+      "expected_found": true,
+      "legacy_path": [
+        [
+          33000,
+          33004
+        ],
+        [
+          33001,
+          33004
+        ],
+        [
+          33002,
+          33004
+        ],
+        [
+          33003,
+          33004
+        ]
+      ]
+    },
+    {
+      "case_id": 14,
+      "name": "GoTo_Around_Obstacle",
+      "type": "NAVIGATION",
+      "start": {
+        "x": 33001,
+        "y": 33001
+      },
+      "target": {
+        "x": 33004,
+        "y": 33001
+      },
+      "expected_found": true,
+      "legacy_path": [
+        [
+          33001,
+          33001
+        ],
+        [
+          33002,
+          33002
+        ],
+        [
+          33003,
+          33003
+        ],
+        [
+          33004,
+          33003
+        ],
+        [
+          33004,
+          33002
+        ],
+        [
+          33004,
+          33001
+        ]
+      ]
+    }
+  ]
+}

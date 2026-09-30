@@ -1,0 +1,54 @@
+{"artifact": "NATIVE_SIMULATOR_TRACE", "scenario": "001", "fixture_version": 3, "engine": "Modern_Native_Simulator_001", "seq": 1}
+{"tick": 100, "kind": "STATE_MUTATION", "entity_id": 268435456, "field": "current_hp", "old": 0, "new": 100, "seq": 2}
+{"tick": 100, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectHpUpdate", "sender_id": 268435456, "payload_hex": "0d64006400000000", "seq": 3}
+{"tick": 100, "kind": "STATE_MUTATION", "entity_id": 100000, "field": "current_hp", "old": 0, "new": 20, "seq": 4}
+{"tick": 100, "kind": "STATE_MUTATION", "entity_id": 10001, "field": "current_hp", "old": 20, "new": 20, "seq": 5}
+{"tick": 100, "kind": "INVENTORY_ADDED", "owner_id": 0, "item_id": 5, "count": 250, "seq": 6}
+{"tick": 130, "kind": "TIME_INJECTED", "tick_now": 130, "seq": 7}
+{"tick": 130, "kind": "COMMAND", "name": "CmdAttack", "payload": {"attacker": 268435456, "target": 10001}, "seq": 8}
+{"tick": 130, "kind": "HIT_EVALUATED", "actor": 268435456, "target": 10001, "hit": true, "seq": 9}
+{"tick": 130, "kind": "DAMAGE_CALCULATED", "actor": 268435456, "target": 10001, "damage": 8, "seq": 10}
+{"tick": 130, "kind": "STATE_MUTATION", "entity_id": 10001, "field": "current_hp", "old": 20, "new": 12, "seq": 11}
+{"tick": 130, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000801000000000000000000000000", "seq": 12}
+{"tick": 130, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000801000000000000000000000000", "seq": 13}
+{"tick": 160, "kind": "TIME_INJECTED", "tick_now": 160, "seq": 14}
+{"tick": 160, "kind": "COMMAND", "name": "CmdAttack", "payload": {"attacker": 268435456, "target": 10001}, "seq": 15}
+{"tick": 160, "kind": "HIT_EVALUATED", "actor": 268435456, "target": 10001, "hit": true, "seq": 16}
+{"tick": 160, "kind": "DAMAGE_CALCULATED", "actor": 268435456, "target": 10001, "damage": 4, "seq": 17}
+{"tick": 160, "kind": "STATE_MUTATION", "entity_id": 10001, "field": "current_hp", "old": 12, "new": 8, "seq": 18}
+{"tick": 160, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000401000000000000000000000000", "seq": 19}
+{"tick": 160, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000401000000000000000000000000", "seq": 20}
+{"tick": 190, "kind": "TIME_INJECTED", "tick_now": 190, "seq": 21}
+{"tick": 190, "kind": "COMMAND", "name": "CmdAttack", "payload": {"attacker": 268435456, "target": 10001}, "seq": 22}
+{"tick": 190, "kind": "HIT_EVALUATED", "actor": 268435456, "target": 10001, "hit": false, "seq": 23}
+{"tick": 190, "kind": "DAMAGE_CALCULATED", "actor": 268435456, "target": 10001, "damage": 0, "seq": 24}
+{"tick": 190, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000001000000000000000000000000", "seq": 25}
+{"tick": 190, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000001000000000000000000000000", "seq": 26}
+{"tick": 220, "kind": "TIME_INJECTED", "tick_now": 220, "seq": 27}
+{"tick": 220, "kind": "COMMAND", "name": "CmdAttack", "payload": {"attacker": 268435456, "target": 10001}, "seq": 28}
+{"tick": 220, "kind": "HIT_EVALUATED", "actor": 268435456, "target": 10001, "hit": true, "seq": 29}
+{"tick": 220, "kind": "DAMAGE_CALCULATED", "actor": 268435456, "target": 10001, "damage": 5, "seq": 30}
+{"tick": 220, "kind": "STATE_MUTATION", "entity_id": 10001, "field": "current_hp", "old": 8, "new": 3, "seq": 31}
+{"tick": 220, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000501000000000000000000000000", "seq": 32}
+{"tick": 220, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000501000000000000000000000000", "seq": 33}
+{"tick": 250, "kind": "TIME_INJECTED", "tick_now": 250, "seq": 34}
+{"tick": 250, "kind": "COMMAND", "name": "CmdAttack", "payload": {"attacker": 268435456, "target": 10001}, "seq": 35}
+{"tick": 250, "kind": "HIT_EVALUATED", "actor": 268435456, "target": 10001, "hit": true, "seq": 36}
+{"tick": 250, "kind": "DAMAGE_CALCULATED", "actor": 268435456, "target": 10001, "damage": 0, "seq": 37}
+{"tick": 250, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000001000000000000000000000000", "seq": 38}
+{"tick": 250, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000001000000000000000000000000", "seq": 39}
+{"tick": 280, "kind": "TIME_INJECTED", "tick_now": 280, "seq": 40}
+{"tick": 280, "kind": "COMMAND", "name": "CmdAttack", "payload": {"attacker": 268435456, "target": 10001}, "seq": 41}
+{"tick": 280, "kind": "HIT_EVALUATED", "actor": 268435456, "target": 10001, "hit": true, "seq": 42}
+{"tick": 280, "kind": "DAMAGE_CALCULATED", "actor": 268435456, "target": 10001, "damage": 7, "seq": 43}
+{"tick": 280, "kind": "ENTITY_DIED", "entity_id": 10001, "seq": 44}
+{"tick": 280, "kind": "EXP_AWARDED", "entity_id": 268435456, "exp": 20, "total_exp": 20, "lawful": 0, "seq": 45}
+{"tick": 280, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectLawful", "payload_hex": "59000000100080000000000000000000", "seq": 46}
+{"tick": 280, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectLawful", "payload_hex": "59000000100080000000000000000000", "seq": 47}
+{"tick": 280, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAction", "payload_hex": "2011270000080000", "seq": 48}
+{"tick": 280, "kind": "PACKET_SERIALIZED", "packet_class": "S_BasePacket", "payload_hex": "2011270000080000", "seq": 49}
+{"tick": 280, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAction", "payload_hex": "2011270000080000", "seq": 50}
+{"tick": 280, "kind": "ITEM_DROPPED", "monster_id": 10001, "item_id": 5, "count": 250, "x": 33431, "y": 32810, "seq": 51}
+{"tick": 280, "kind": "STATE_MUTATION", "entity_id": 10001, "field": "current_hp", "old": 3, "new": 0, "seq": 52}
+{"tick": 280, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000701000000000000000000000000", "seq": 53}
+{"tick": 280, "kind": "PACKET_SERIALIZED", "packet_class": "S_ObjectAttack", "payload_hex": "230100000010112700000701000000000000000000000000", "seq": 54}
