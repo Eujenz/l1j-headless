@@ -1,0 +1,77 @@
+{"area_visited": "map1_dungeon", "player_final": {"alive": true, "exp": 40, "heading": 4, "hp": 59, "level": 1, "map_id": 1, "max_hp": 100, "name": "Traveler", "x": 32671, "y": 32804}, "player_initial": {"alive": true, "exp": 0, "heading": 0, "hp": 100, "level": 1, "map_id": 0, "max_hp": 100, "name": "Traveler", "x": 32477, "y": 32854}, "scenario": "006", "scope": "playable_mvp", "total_domain_events": 76, "turns_to_kill": 9, "type": "META"}
+{"entity_id": 10001, "event_type": "WorldRoutePlanned", "goal_map": 1, "map_sequence": [0, 1], "start_map": 0, "tick": 100, "transition_ids": ["portal_ti_to_tid1"]}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32477, "from_y": 32854, "heading": 0, "tick": 110}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32477, "from_y": 32854, "heading": 0, "tick": 110, "to_x": 32477, "to_y": 32853}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 0, "new_x": 32477, "new_y": 32853, "old_x": 32477, "old_y": 32854, "tick": 110}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32477, "from_y": 32853, "heading": 0, "tick": 120}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32477, "from_y": 32853, "heading": 0, "tick": 120, "to_x": 32477, "to_y": 32852}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 0, "new_x": 32477, "new_y": 32852, "old_x": 32477, "old_y": 32853, "tick": 120}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32477, "from_y": 32852, "heading": 0, "tick": 130}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32477, "from_y": 32852, "heading": 0, "tick": 130, "to_x": 32477, "to_y": 32851}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 0, "new_x": 32477, "new_y": 32851, "old_x": 32477, "old_y": 32852, "tick": 130}
+{"entity_id": 10001, "event_type": "DestinationReached", "target_x": 32477, "target_y": 32851, "tick": 130}
+{"entity_id": 10001, "event_type": "PortalTriggered", "source_map": 0, "source_x": 32477, "source_y": 32851, "tick": 140, "transition_id": "portal_ti_to_tid1"}
+{"entity_id": 10001, "event_type": "WorldTransitionCommitted", "new_heading": 4, "new_map": 1, "new_x": 32669, "new_y": 32802, "old_map": 0, "old_x": 32477, "old_y": 32851, "tick": 140}
+{"entity_id": 10001, "event_type": "MapEntered", "heading": 4, "map_id": 1, "tick": 140, "x": 32669, "y": 32802}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32669, "from_y": 32802, "heading": 2, "tick": 150}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32669, "from_y": 32802, "heading": 2, "tick": 150, "to_x": 32670, "to_y": 32802}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 2, "new_x": 32670, "new_y": 32802, "old_x": 32669, "old_y": 32802, "tick": 150}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32670, "from_y": 32802, "heading": 3, "tick": 160}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32670, "from_y": 32802, "heading": 3, "tick": 160, "to_x": 32671, "to_y": 32803}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 3, "new_x": 32671, "new_y": 32803, "old_x": 32670, "old_y": 32802, "tick": 160}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32671, "from_y": 32803, "heading": 4, "tick": 170}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32671, "from_y": 32803, "heading": 4, "tick": 170, "to_x": 32671, "to_y": 32804}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 4, "new_x": 32671, "new_y": 32804, "old_x": 32671, "old_y": 32803, "tick": 170}
+{"entity_id": 10001, "event_type": "DestinationReached", "target_x": 32671, "target_y": 32804, "tick": 170}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 190}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 190}
+{"attacker_id": 10001, "damage": 8, "event_type": "DamageApplied", "target_id": 20002, "tick": 190}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 37, "old_hp": 45, "tick": 190}
+{"attacker_id": 20002, "damage": 8, "event_type": "DamageApplied", "target_id": 10001, "tick": 200}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 92, "old_hp": 100, "tick": 200}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 210}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 210}
+{"attacker_id": 10001, "damage": 7, "event_type": "DamageApplied", "target_id": 20002, "tick": 210}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 30, "old_hp": 37, "tick": 210}
+{"attacker_id": 20002, "damage": 7, "event_type": "DamageApplied", "target_id": 10001, "tick": 220}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 85, "old_hp": 92, "tick": 220}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 230}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 230}
+{"attacker_id": 10001, "damage": 0, "event_type": "DamageApplied", "target_id": 20002, "tick": 230}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 30, "old_hp": 30, "tick": 230}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 85, "old_hp": 85, "tick": 240}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 250}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 250}
+{"attacker_id": 10001, "damage": 3, "event_type": "DamageApplied", "target_id": 20002, "tick": 250}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 27, "old_hp": 30, "tick": 250}
+{"attacker_id": 20002, "damage": 5, "event_type": "DamageApplied", "target_id": 10001, "tick": 260}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 80, "old_hp": 85, "tick": 260}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 270}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 270}
+{"attacker_id": 10001, "damage": 4, "event_type": "DamageApplied", "target_id": 20002, "tick": 270}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 23, "old_hp": 27, "tick": 270}
+{"attacker_id": 20002, "damage": 6, "event_type": "DamageApplied", "target_id": 10001, "tick": 280}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 74, "old_hp": 80, "tick": 280}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 290}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 290}
+{"attacker_id": 10001, "damage": 10, "event_type": "DamageApplied", "target_id": 20002, "tick": 290}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 13, "old_hp": 23, "tick": 290}
+{"attacker_id": 20002, "damage": 8, "event_type": "DamageApplied", "target_id": 10001, "tick": 300}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 66, "old_hp": 74, "tick": 300}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 310}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 310}
+{"attacker_id": 10001, "damage": 9, "event_type": "DamageApplied", "target_id": 20002, "tick": 310}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 4, "old_hp": 13, "tick": 310}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 66, "old_hp": 66, "tick": 320}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 330}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 330}
+{"attacker_id": 10001, "damage": 0, "event_type": "DamageApplied", "target_id": 20002, "tick": 330}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 4, "old_hp": 4, "tick": 330}
+{"attacker_id": 20002, "damage": 7, "event_type": "DamageApplied", "target_id": 10001, "tick": 340}
+{"entity_id": 10001, "event_type": "HpChanged", "new_hp": 59, "old_hp": 66, "tick": 340}
+{"attacker_id": 10001, "event_type": "AttackStarted", "target_id": 20002, "tick": 350}
+{"attacker_id": 10001, "event_type": "HitResolved", "is_hit": true, "target_id": 20002, "tick": 350}
+{"attacker_id": 10001, "damage": 10, "event_type": "DamageApplied", "target_id": 20002, "tick": 350}
+{"entity_id": 20002, "event_type": "HpChanged", "new_hp": 0, "old_hp": 4, "tick": 350}
+{"event_type": "MonsterDied", "monster_id": 20002, "tick": 350}
+{"actor_id": 10001, "event_type": "ExperienceGranted", "exp_gained": 40, "lawful": 0, "tick": 350, "total_exp": 40}
