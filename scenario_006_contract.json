@@ -1,0 +1,90 @@
+{
+  "contract_schema": "1.0",
+  "scenario_id": "006",
+  "fixture_version": 1,
+  "source": "INSTRUMENTED_LEGACY_REFERENCE + CANONICAL_MAPS + MODERN_DESIGN",
+  "scope": "playable_mvp",
+  "rng_seed": 424242,
+  "player": {
+    "id": 10001,
+    "name": "Traveler",
+    "class_type": 1,
+    "level": 1,
+    "hp": 100,
+    "max_hp": 100,
+    "str": 16,
+    "dex": 12,
+    "con": 14,
+    "int": 8,
+    "wis": 9,
+    "cha": 12,
+    "start_map": 0,
+    "start_x": 32477,
+    "start_y": 32854,
+    "start_heading": 0,
+    "weapon": {
+      "item_id": 1,
+      "name": "Short Sword",
+      "weapon_type": 1,
+      "dmg_small": 8,
+      "dmg_large": 8,
+      "enchant": 0,
+      "bless": 0
+    }
+  },
+  "hunting_areas": [
+    {
+      "id": "map0_field",
+      "name": "Talking Island Surface Field",
+      "map_id": 0,
+      "goal_x": 32475,
+      "goal_y": 32854,
+      "monster_type": "Goblin"
+    },
+    {
+      "id": "map1_dungeon",
+      "name": "Talking Island Dungeon 1F",
+      "map_id": 1,
+      "goal_x": 32671,
+      "goal_y": 32804,
+      "monster_type": "Skeleton"
+    }
+  ],
+  "monsters": {
+    "Goblin": {
+      "id": 20001,
+      "name": "Goblin",
+      "level": 3,
+      "hp": 30,
+      "max_hp": 30,
+      "ac": 10,
+      "exp": 20,
+      "size": "small",
+      "atk_min": 3,
+      "atk_max": 6
+    },
+    "Skeleton": {
+      "id": 20002,
+      "name": "Skeleton",
+      "level": 5,
+      "hp": 45,
+      "max_hp": 45,
+      "ac": 8,
+      "exp": 40,
+      "size": "small",
+      "atk_min": 5,
+      "atk_max": 9
+    }
+  },
+  "demo_mission": {
+    "target_area_id": "map1_dungeon",
+    "expected_route": {
+      "map_sequence": [0, 1],
+      "transitions": ["portal_ti_to_tid1"]
+    },
+    "expected_arrival_pos": [32671, 32804],
+    "expected_encounter": "Skeleton",
+    "expected_outcome": "VICTORY",
+    "expected_exp_awarded": 40
+  }
+}
