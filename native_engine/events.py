@@ -127,3 +127,11 @@ class MapEntered(DomainEvent):
     heading: int
 
 
+# --- WORLD ROUTE PLANNING EVENTS (MODERN_DESIGN) ---
+@dataclass
+class WorldRoutePlanned(DomainEvent):
+    entity_id: int
+    start_map: int
+    goal_map: int
+    map_sequence: list
+    transition_ids: list

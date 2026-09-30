@@ -64,6 +64,30 @@ class Actor:
     lawful: int = 0
     is_dead: bool = False
 
+    @property
+    def x(self) -> int:
+        return self.pos.x
+
+    @x.setter
+    def x(self, val: int):
+        self.pos.x = val
+
+    @property
+    def y(self) -> int:
+        return self.pos.y
+
+    @y.setter
+    def y(self, val: int):
+        self.pos.y = val
+
+    @property
+    def map_id(self) -> int:
+        return self.pos.map_id
+
+    @map_id.setter
+    def map_id(self, val: int):
+        self.pos.map_id = val
+
 @dataclass
 class Monster:
     id: int

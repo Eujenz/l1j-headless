@@ -1,0 +1,25 @@
+{"map_0_digest": "7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5", "map_1_digest": "3a8068953f7fbb57fd30bda0a6f63190a7a379a0943bbdb0cc1ccbffc38eb21b", "map_sequence": [0, 1], "scenario": "005", "transition_ids": ["portal_ti_to_tid1"], "type": "META"}
+{"entity_id": 10001, "event_type": "WorldRoutePlanned", "goal_map": 1, "map_sequence": [0, 1], "start_map": 0, "tick": 100, "transition_ids": ["portal_ti_to_tid1"]}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32477, "from_y": 32854, "heading": 0, "tick": 110}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32477, "from_y": 32854, "heading": 0, "tick": 110, "to_x": 32477, "to_y": 32853}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 0, "new_x": 32477, "new_y": 32853, "old_x": 32477, "old_y": 32854, "tick": 110}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32477, "from_y": 32853, "heading": 0, "tick": 120}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32477, "from_y": 32853, "heading": 0, "tick": 120, "to_x": 32477, "to_y": 32852}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 0, "new_x": 32477, "new_y": 32852, "old_x": 32477, "old_y": 32853, "tick": 120}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32477, "from_y": 32852, "heading": 0, "tick": 130}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32477, "from_y": 32852, "heading": 0, "tick": 130, "to_x": 32477, "to_y": 32851}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 0, "new_x": 32477, "new_y": 32851, "old_x": 32477, "old_y": 32852, "tick": 130}
+{"entity_id": 10001, "event_type": "DestinationReached", "target_x": 32477, "target_y": 32851, "tick": 130}
+{"entity_id": 10001, "event_type": "PortalTriggered", "source_map": 0, "source_x": 32477, "source_y": 32851, "tick": 140, "transition_id": "portal_ti_to_tid1"}
+{"entity_id": 10001, "event_type": "WorldTransitionCommitted", "new_heading": 4, "new_map": 1, "new_x": 32669, "new_y": 32802, "old_map": 0, "old_x": 32477, "old_y": 32851, "tick": 140}
+{"entity_id": 10001, "event_type": "MapEntered", "heading": 4, "map_id": 1, "tick": 140, "x": 32669, "y": 32802}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32669, "from_y": 32802, "heading": 2, "tick": 150}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32669, "from_y": 32802, "heading": 2, "tick": 150, "to_x": 32670, "to_y": 32802}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 2, "new_x": 32670, "new_y": 32802, "old_x": 32669, "old_y": 32802, "tick": 150}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32670, "from_y": 32802, "heading": 3, "tick": 160}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32670, "from_y": 32802, "heading": 3, "tick": 160, "to_x": 32671, "to_y": 32803}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 3, "new_x": 32671, "new_y": 32803, "old_x": 32670, "old_y": 32802, "tick": 160}
+{"entity_id": 10001, "event_type": "MoveAttempted", "from_x": 32671, "from_y": 32803, "heading": 4, "tick": 170}
+{"entity_id": 10001, "event_type": "MoveAccepted", "from_x": 32671, "from_y": 32803, "heading": 4, "tick": 170, "to_x": 32671, "to_y": 32804}
+{"entity_id": 10001, "event_type": "PositionChanged", "heading": 4, "new_x": 32671, "new_y": 32804, "old_x": 32671, "old_y": 32803, "tick": 170}
+{"entity_id": 10001, "event_type": "DestinationReached", "target_x": 32671, "target_y": 32804, "tick": 170}
