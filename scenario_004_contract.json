@@ -1,0 +1,159 @@
+{
+  "scenario_id": "004",
+  "scope": "canonical_real_map_import",
+  "provenance": {
+    "source_repository": "Eujenz/182c",
+    "source_commit": "7eeacbc",
+    "map_id": 0,
+    "map_name": "Talking Island Surface",
+    "source_artifact": "maps/Cache/0.data",
+    "source_artifact_sha256": "9ff8acdbe12e846329bcc4207c8a88dda956ccfc409641a93ecf7cd1b8acd486",
+    "metadata_artifact": "maps/maps.csv",
+    "metadata_artifact_sha256": "c44417c44c624f85434ea33b10a95934af06047a26310d39b9ff5b4f68c18298",
+    "legacy_loader_reference": "net.world.WorldMap.java:readCache/get_map"
+  },
+  "map_specification": {
+    "map_id": 0,
+    "bounds": {
+      "loc_x1": 32256,
+      "loc_x2": 32767,
+      "loc_y1": 32768,
+      "loc_y2": 33279
+    },
+    "dimensions": {
+      "width": 512,
+      "height": 512
+    },
+    "total_cells": 262144,
+    "format": "Headerless Raw Byte Grid with 2-byte truncation padding",
+    "canonical_geometry_digest": "7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5"
+  },
+  "sample_coordinates": [
+    {
+      "x": 32256,
+      "y": 32768,
+      "expected_tile": 0,
+      "hex": "0x00",
+      "description": "NW Bounding Corner (Border Void)"
+    },
+    {
+      "x": 32767,
+      "y": 32768,
+      "expected_tile": 0,
+      "hex": "0x00",
+      "description": "NE Bounding Corner (Border Void)"
+    },
+    {
+      "x": 32256,
+      "y": 33279,
+      "expected_tile": 0,
+      "hex": "0x00",
+      "description": "SW Bounding Corner (Border Void)"
+    },
+    {
+      "x": 32767,
+      "y": 33279,
+      "expected_tile": 0,
+      "hex": "0x00",
+      "description": "SE Bounding Corner (Border Void)"
+    },
+    {
+      "x": 32511,
+      "y": 32790,
+      "expected_tile": 15,
+      "hex": "0x0F",
+      "description": "Fully Open Normal Terrain (E+N Walk & Attack)"
+    },
+    {
+      "x": 32513,
+      "y": 32789,
+      "expected_tile": 5,
+      "hex": "0x05",
+      "description": "East Passable Only (E Walk & Attack)"
+    },
+    {
+      "x": 32518,
+      "y": 32790,
+      "expected_tile": 10,
+      "hex": "0x0A",
+      "description": "North Passable Only (N Walk & Attack)"
+    },
+    {
+      "x": 32515,
+      "y": 32789,
+      "expected_tile": 12,
+      "hex": "0x0C",
+      "description": "Low Obstacle / Water (Attack Passable, Walk Blocked)"
+    },
+    {
+      "x": 32544,
+      "y": 32805,
+      "expected_tile": 14,
+      "hex": "0x0E",
+      "description": "North Passable + Projectile East (East Walk Blocked)"
+    },
+    {
+      "x": 32577,
+      "y": 32909,
+      "expected_tile": 31,
+      "hex": "0x1F",
+      "description": "Safety Zone Open Terrain"
+    },
+    {
+      "x": 32579,
+      "y": 32909,
+      "expected_tile": 16,
+      "hex": "0x10",
+      "description": "Safety Zone Impassable Wall"
+    },
+    {
+      "x": 32477,
+      "y": 32851,
+      "expected_tile": 32,
+      "hex": "0x20",
+      "description": "Combat Zone Portal Structure Wall (Static Terrain Base)"
+    }
+  ],
+  "movement_smoke_cases": [
+    {
+      "case_id": "M01_East_Passable",
+      "from_x": 32511,
+      "from_y": 32790,
+      "heading": 2,
+      "expected_passable": true,
+      "expected_reason": "PASS"
+    },
+    {
+      "case_id": "M02_North_Passable",
+      "from_x": 32511,
+      "from_y": 32790,
+      "heading": 0,
+      "expected_passable": true,
+      "expected_reason": "PASS"
+    },
+    {
+      "case_id": "M03_East_Blocked_On_North_Only_Tile",
+      "from_x": 32518,
+      "from_y": 32790,
+      "heading": 2,
+      "expected_passable": false,
+      "expected_reason": "STATIC_WALL"
+    },
+    {
+      "case_id": "M04_Walk_Blocked_On_Shootable_Tile",
+      "from_x": 32515,
+      "from_y": 32789,
+      "heading": 2,
+      "expected_passable": false,
+      "expected_reason": "STATIC_WALL"
+    },
+    {
+      "case_id": "M05_Out_Of_Bounds_West",
+      "from_x": 32255,
+      "from_y": 32800,
+      "heading": 2,
+      "expected_passable": false,
+      "expected_reason": "OUT_OF_BOUNDS"
+    }
+  ]
+}

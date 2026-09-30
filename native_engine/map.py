@@ -1,11 +1,21 @@
 """
 native_engine/map.py - World Geometry & Grid Model
 Encapsulates 2D tile grid and authentic 182 IsThroughObject bitmask semantics.
+Supports both sparse dictionary overrides (dynamic overlays) and compact
+dense byte arrays (real canonical map imports).
 """
 from typing import Dict, Tuple, Optional
 
 class WorldMapGrid:
-    def __init__(self, map_id: int, loc_x1: int, loc_y1: int, width: int, height: int):
+    def __init__(
+        self,
+        map_id: int,
+        loc_x1: int,
+        loc_y1: int,
+        width: int,
+        height: int,
+        dense_tiles: Optional[bytes] = None
+    ):
         self.map_id = map_id
         self.loc_x1 = loc_x1
         self.loc_y1 = loc_y1
@@ -13,15 +23,27 @@ class WorldMapGrid:
         self.loc_y2 = loc_y1 + height - 1
         self.width = width
         self.height = height
+        self.dense_tiles = dense_tiles
         self.tiles: Dict[Tuple[int, int], int] = {}
 
     def set_tile(self, x: int, y: int, val: int):
+        """Set a dynamic overlay or runtime tile mutation."""
         self.tiles[(x, y)] = val
 
     def get_tile(self, x: int, y: int) -> int:
+        """
+        Retrieve tile bitmask at world coordinates (x, y).
+        Dynamic runtime overlays in self.tiles take precedence over base dense_tiles.
+        """
         if x < self.loc_x1 or x > self.loc_x2 or y < self.loc_y1 or y > self.loc_y2:
             return 0
-        return self.tiles.get((x, y), 0)
+        if (x, y) in self.tiles:
+            return self.tiles[(x, y)]
+        if self.dense_tiles is not None:
+            idx = self.width * (y - self.loc_y1) + (x - self.loc_x1)
+            if 0 <= idx < len(self.dense_tiles):
+                return self.dense_tiles[idx]
+        return 0
 
     def is_in_bounds(self, x: int, y: int) -> bool:
         return self.loc_x1 <= x <= self.loc_x2 and self.loc_y1 <= y <= self.loc_y2

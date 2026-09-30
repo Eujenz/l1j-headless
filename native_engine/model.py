@@ -1,9 +1,12 @@
 """
-native_engine/model.py - Minimal Domain Models for Scenario 001
+native_engine/model.py - Minimal Domain Models for L1J Headless
 Strictly decoupled from socket, packet, database, and Java runtime classes.
 """
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Tuple, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .map import WorldMapGrid
 
 @dataclass
 class Position:
@@ -76,3 +79,30 @@ class Monster:
     heading: int
     inventory: Inventory
     is_dead: bool = False
+
+@dataclass
+class CanonicalMapDefinition:
+    """
+    Canonical, decoupled map geometry representation.
+    Encapsulates static terrain boundaries and contiguous tile memory.
+    """
+    map_id: int
+    loc_x1: int
+    loc_x2: int
+    loc_y1: int
+    loc_y2: int
+    width: int
+    height: int
+    raw_tiles: bytes
+    canonical_geometry_digest: str = ""
+
+    def to_grid(self) -> 'WorldMapGrid':
+        from .map import WorldMapGrid
+        return WorldMapGrid(
+            map_id=self.map_id,
+            loc_x1=self.loc_x1,
+            loc_y1=self.loc_y1,
+            width=self.width,
+            height=self.height,
+            dense_tiles=self.raw_tiles
+        )
