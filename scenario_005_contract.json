@@ -1,0 +1,141 @@
+{
+  "contract_schema": "1.0",
+  "scenario_id": "005",
+  "fixture_version": 1,
+  "source": "INSTRUMENTED_LEGACY_REFERENCE + CANONICAL_MAPS + MODERN_DESIGN",
+  "scope": "real_multi_map_route_planning",
+  "maps": [
+    {
+      "map_id": 0,
+      "name": "Talking_Island_Surface",
+      "loc_x1": 32256,
+      "loc_x2": 32767,
+      "loc_y1": 32768,
+      "loc_y2": 33279,
+      "width": 512,
+      "height": 512,
+      "total_cells": 262144,
+      "source_file": "maps/Cache/0.data",
+      "source_sha256": "9ff8acdbe12e846329bcc4207c8a88dda956ccfc409641a93ecf7cd1b8acd486",
+      "canonical_geometry_digest": "7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5",
+      "provenance": {
+        "source_repo": "Eujenz/182c",
+        "source_commit": "7eeacbc",
+        "metadata_source": "maps/maps.csv",
+        "binary_source": "maps/Cache/0.data"
+      }
+    },
+    {
+      "map_id": 1,
+      "name": "Talking_Island_Dungeon_1F",
+      "loc_x1": 32640,
+      "loc_x2": 32767,
+      "loc_y1": 32768,
+      "loc_y2": 32895,
+      "width": 128,
+      "height": 128,
+      "total_cells": 16384,
+      "source_file": "maps/Cache/1.data",
+      "source_sha256": "432b053abf837a28542a97fcc2b1309d6b8305e7dff967a69c32ac08a8a711fd",
+      "canonical_geometry_digest": "3a8068953f7fbb57fd30bda0a6f63190a7a379a0943bbdb0cc1ccbffc38eb21b",
+      "provenance": {
+        "source_repo": "Eujenz/182c",
+        "source_commit": "7eeacbc",
+        "metadata_source": "maps/maps.csv",
+        "binary_source": "maps/Cache/1.data"
+      }
+    }
+  ],
+  "transitions": [
+    {
+      "transition_id": "portal_ti_to_tid1",
+      "type": "PORTAL",
+      "source_map": 0,
+      "source_x": 32477,
+      "source_y": 32851,
+      "target_map": 1,
+      "target_x": 32669,
+      "target_y": 32802,
+      "target_heading": 4,
+      "requirements": {
+        "item_id": 0
+      },
+      "provenance": {
+        "source_repo": "Eujenz/182c",
+        "source_commit": "7eeacbc",
+        "sql_source": "db/lineage/dungeon.sql",
+        "sql_row_id": 2
+      }
+    }
+  ],
+  "actor": {
+    "id": 10001,
+    "name": "MultiMapTraveler",
+    "initial_map": 0,
+    "initial_x": 32477,
+    "initial_y": 32854,
+    "initial_heading": 0
+  },
+  "mission": {
+    "start": {
+      "map": 0,
+      "x": 32477,
+      "y": 32854
+    },
+    "portal": {
+      "map": 0,
+      "x": 32477,
+      "y": 32851
+    },
+    "landing": {
+      "map": 1,
+      "x": 32669,
+      "y": 32802,
+      "heading": 4
+    },
+    "goal": {
+      "map": 1,
+      "x": 32671,
+      "y": 32804
+    }
+  },
+  "expected_world_route": {
+    "map_sequence": [0, 1],
+    "transition_ids": ["portal_ti_to_tid1"]
+  },
+  "expected_phases": [
+    {
+      "phase": 1,
+      "description": "World Route Planning (Topological Graph Search)",
+      "expected_maps": [0, 1],
+      "expected_transitions": ["portal_ti_to_tid1"]
+    },
+    {
+      "phase": 2,
+      "description": "Leg 1: Local Navigation on Real Map 0 to Portal Trigger",
+      "expected_end_map": 0,
+      "expected_end_pos": [32477, 32851],
+      "expected_headings": [0, 0, 0]
+    },
+    {
+      "phase": 3,
+      "description": "Cross-Map Portal Transition Committed",
+      "expected_transition_id": "portal_ti_to_tid1",
+      "expected_new_map": 1,
+      "expected_landing_pos": [32669, 32802],
+      "expected_heading": 4
+    },
+    {
+      "phase": 4,
+      "description": "Leg 2: Local Navigation on Real Map 1 to Goal",
+      "expected_final_map": 1,
+      "expected_final_pos": [32671, 32804],
+      "expected_headings": [2, 3, 4]
+    },
+    {
+      "phase": 5,
+      "description": "Final Destination Reached",
+      "destination_reached": true
+    }
+  ]
+}
