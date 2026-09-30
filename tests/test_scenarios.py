@@ -49,6 +49,16 @@ class TestCertifiedScenarios(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Scenario 005 differential verification failed:\n{res.stdout}\n{res.stderr}")
         self.assertIn("SCENARIO 005 CONFORMANCE CERTIFICATION: PASS", res.stdout)
 
+    def test_scenario_006_mvp_replay(self):
+        res = subprocess.run([sys.executable, "mvp_replay.py"], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(res.returncode, 0, f"Scenario 006 MVP replay failed:\n{res.stdout}\n{res.stderr}")
+        self.assertIn("OVERALL STATUS: PASS", res.stdout)
+
+    def test_scenario_006_mvp_demo(self):
+        res = subprocess.run([sys.executable, "mvp.py", "--demo"], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(res.returncode, 0, f"Scenario 006 MVP demo failed:\n{res.stdout}\n{res.stderr}")
+        self.assertIn("DEMO COMPLETED SUCCESSFULLY", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

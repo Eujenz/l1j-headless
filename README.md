@@ -20,6 +20,7 @@ Current certified slices:
 003 Deterministic Cross-Map Portal Transition
 004 Canonical Real Map Import
 005 Real Multi-Map Route Planning
+006 Playable MVP (Hunting / Combat / Character State)
 
 Legacy Reference:
 Eujenz/182c
@@ -144,6 +145,7 @@ For details on the research methodology, see [Methodology Documentation](docs/me
 | **003** | Deterministic Cross-Map Portal Transition | **Certified** | [Spec](docs/scenario_003_specification.md) |
 | **004** | Canonical Real Map Import | **Certified** | [Spec](docs/scenario_004_specification.md) |
 | **005** | Real Multi-Map Route Planning | **Certified** | [Spec](docs/scenario_005_specification.md) |
+| **006** | Playable MVP (Hunting / Combat / State) | **Certified** | [Spec](docs/scenario_006_playable_mvp_specification.md) |
 
 ### Scenario Breakdown
 
@@ -181,12 +183,20 @@ For details on the research methodology, see [Methodology Documentation](docs/me
   - Real terrain portal approach on Map 0 to `(32477, 32851)` without synthetic geometries
   - Atomic cross-map state handoff to Map 1 landing `(32669, 32802, heading 4)`
   - Real Map 1 local navigation to destination `(32671, 32804)`
+- **Scenario 006 (Playable MVP)**:
+  - First end-to-end playable and interactive vertical slice (`GameSession`)
+  - Unified loop: Status View -> Hunting Area Selection -> Real World Route Planning -> Real Portal Transition -> Monster Encounter -> Turn-Based Combat -> Monster Death & EXP Mutation
+  - Predefined hunting areas on Real Map 0 (`map0_field`) and Real Map 1 (`map1_dungeon`)
+  - Deterministic monster templates (`Goblin`, `Skeleton`)
+  - Interactive CLI and automated demonstration mode (`python mvp.py --demo`)
+  - Deterministic replay verification suite (`python mvp_replay.py`) emitting `mvp_trace.jsonl`
 
 ### Conformance Verification Note
 - **Scenario 003 Differential Conformance**: `PASS` (100% state and domain event equivalence between Legacy Oracle and Native Engine).
   *Note: This certification applies strictly to the verified behavioral scope of Scenario 003 and does not imply comprehensive feature parity with all L1J 1.82 mechanics.*
 - **Scenario 004 Differential Conformance**: `PASS` (100% bit-exact equivalence across all 262,144 cells of Talking Island Map 0 between Legacy Oracle and Native Engine, matching canonical SHA-256 digest `7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5`).
 - **Scenario 005 Differential Conformance**: `PASS` (100% conformance across L0 Map Integrity, L1 Transition Integrity, L2 World Topology, L3 Real Approach, L4 Atomic Transition Commit, and L5 Real Destination Arrival).
+- **Scenario 006 Conformance**: `PASS` (100% deterministic execution of entire playable loop across real maps, portal traversal, and turn-based combat with verified state mutations).
 - **Extraction Source Provenance**: `Eujenz/182c@7eeacbc`. See [Repository Migration Provenance](docs/repository_migration.md).
 
 ---
@@ -242,6 +252,15 @@ python scenario_005_replay.py
 # Scenario 005: Differential Conformance against Legacy Oracle
 python scenario_005_differential.py
 
+# Playable MVP: Run the automated end-to-end demo
+python mvp.py --demo
+
+# Playable MVP: Interactive text-based game session
+python mvp.py
+
+# Scenario 006: Deterministic Replay & Conformance Verification
+python mvp_replay.py
+
 # Tool: Import real map binary into canonical format
 python tools/import_real_map.py --map-id 0 --cache-dir <path_to_maps_Cache> --output map0_canonical.json
 
@@ -269,6 +288,7 @@ python -m unittest discover tests
 - [x] **Scenario 003**: Cross-Map Portal Transition
 - [x] **Scenario 004**: Canonical Real Map Import
 - [x] **Scenario 005**: Real Multi-Map Route Planning
+- [x] **Scenario 006**: Playable MVP (Hunting / Combat / Character State)
 - [ ] Multi-Actor World Simulation
 - [ ] NPC & Object Interaction
 - [ ] Items & Equipment Systems
