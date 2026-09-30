@@ -1,0 +1,228 @@
+{
+  "contract_schema": "1.0",
+  "scenario_id": "007",
+  "fixture_version": 1,
+  "source": "LEGACY_ARCHAEOLOGY_EXTRACTED_LINEAGE182C + DETERMINISTIC_WORLD_SIMULATION",
+  "scope": "authentic_world_hunting_simulation",
+  "rng_seed": 777777,
+  "player": {
+    "id": 10001,
+    "name": "Arthur",
+    "class_type": 1,
+    "level": 1,
+    "hp": 100,
+    "max_hp": 100,
+    "str": 16,
+    "dex": 12,
+    "con": 14,
+    "int": 8,
+    "wis": 9,
+    "cha": 12,
+    "ac": 10,
+    "exp": 0,
+    "start_map": 0,
+    "start_x": 32608,
+    "start_y": 32776,
+    "start_heading": 0,
+    "inventory": [
+      {
+        "item_id": 28,
+        "name": "Dagger",
+        "type": "dagger",
+        "dmg_small": 4,
+        "dmg_large": 3,
+        "add_hit": 2,
+        "add_dmg": 0,
+        "two_hand": 0
+      },
+      {
+        "item_id": 51,
+        "name": "Short Sword",
+        "type": "sword",
+        "dmg_small": 6,
+        "dmg_large": 8,
+        "add_hit": 0,
+        "add_dmg": 0,
+        "two_hand": 0
+      },
+      {
+        "item_id": 1,
+        "name": "Long Sword",
+        "type": "sword",
+        "dmg_small": 8,
+        "dmg_large": 12,
+        "add_hit": 0,
+        "add_dmg": 0,
+        "two_hand": 0
+      }
+    ],
+    "equipped_weapon_id": 28
+  },
+  "destinations": [
+    {
+      "id": "ti_town",
+      "name": "Talking Island Town",
+      "map_id": 0,
+      "x": 32608,
+      "y": 32776
+    },
+    {
+      "id": "ti_dungeon_entrance",
+      "name": "Talking Island Dungeon Entrance",
+      "map_id": 0,
+      "x": 32477,
+      "y": 32851
+    },
+    {
+      "id": "ti_dungeon_1f",
+      "name": "Talking Island Dungeon 1F",
+      "map_id": 1,
+      "x": 32671,
+      "y": 32804
+    }
+  ],
+  "canonical_monsters": {
+    "1": {
+      "id": 1,
+      "name": "Floating Eye",
+      "level": 8,
+      "hp": 35,
+      "ac": 0,
+      "min_dmg": 0,
+      "max_dmg": 0,
+      "exp": 50,
+      "agro": 0,
+      "undead": 0,
+      "size": "small"
+    },
+    "2": {
+      "id": 2,
+      "name": "Skeleton",
+      "level": 10,
+      "hp": 80,
+      "ac": 0,
+      "min_dmg": 6,
+      "max_dmg": 12,
+      "exp": 101,
+      "agro": 0,
+      "undead": 5,
+      "size": "small"
+    },
+    "3": {
+      "id": 3,
+      "name": "Slime",
+      "level": 6,
+      "hp": 20,
+      "ac": 0,
+      "min_dmg": 2,
+      "max_dmg": 6,
+      "exp": 37,
+      "agro": 1,
+      "undead": 0,
+      "size": "small"
+    },
+    "4": {
+      "id": 4,
+      "name": "Werewolf",
+      "level": 9,
+      "hp": 50,
+      "ac": 0,
+      "min_dmg": 4,
+      "max_dmg": 10,
+      "exp": 82,
+      "agro": 0,
+      "undead": 5,
+      "size": "small"
+    },
+    "6": {
+      "id": 6,
+      "name": "Stone Golem",
+      "level": 13,
+      "hp": 150,
+      "ac": 1,
+      "min_dmg": 12,
+      "max_dmg": 20,
+      "exp": 170,
+      "agro": 1,
+      "undead": 0,
+      "size": "large"
+    },
+    "7": {
+      "id": 7,
+      "name": "Zombie",
+      "level": 7,
+      "hp": 40,
+      "ac": 0,
+      "min_dmg": 5,
+      "max_dmg": 10,
+      "exp": 37,
+      "agro": 0,
+      "undead": 5,
+      "size": "small"
+    },
+    "8": {
+      "id": 8,
+      "name": "Dwarf",
+      "level": 5,
+      "hp": 15,
+      "ac": 0,
+      "min_dmg": 4,
+      "max_dmg": 8,
+      "exp": 26,
+      "agro": 0,
+      "undead": 0,
+      "size": "small"
+    },
+    "9": {
+      "id": 9,
+      "name": "Orc",
+      "level": 2,
+      "hp": 6,
+      "ac": 0,
+      "min_dmg": 2,
+      "max_dmg": 6,
+      "exp": 5,
+      "agro": 0,
+      "undead": 0,
+      "size": "small"
+    },
+    "12": {
+      "id": 12,
+      "name": "Orc Fighter",
+      "level": 8,
+      "hp": 40,
+      "ac": 10,
+      "min_dmg": 6,
+      "max_dmg": 12,
+      "exp": 65,
+      "agro": 1,
+      "undead": 0,
+      "size": "small"
+    },
+    "55": {
+      "id": 55,
+      "name": "Goblin",
+      "level": 2,
+      "hp": 9,
+      "ac": 0,
+      "min_dmg": 3,
+      "max_dmg": 5,
+      "exp": 5,
+      "agro": 0,
+      "undead": 0,
+      "size": "small"
+    }
+  },
+  "exp_table": {
+    "1": 20,
+    "2": 45,
+    "3": 80,
+    "4": 630,
+    "5": 1296
+  },
+  "simulation_rules": {
+    "encounter_proximity": 2,
+    "rest_hp_percent": 20,
+    "weapon_slot": 11
+  }
+}
