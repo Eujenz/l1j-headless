@@ -1,0 +1,13 @@
+{"seq": 1, "artifact": "LEGACY_MAP_ORACLE", "scenario": "004", "source_repo": "Eujenz/182c", "source_commit": "7eeacbc", "map_id": 0, "width": 512, "height": 512, "total_cells": 262144, "canonical_geometry_digest": "7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5"}
+{"seq": 2, "record_type": "TILE_OBSERVATION", "x": 32256, "y": 32768, "raw_tile": 0, "is_through_e": false, "is_through_n": false, "is_attack_e": false, "is_attack_n": false, "zone": 0}
+{"seq": 3, "record_type": "TILE_OBSERVATION", "x": 32767, "y": 32768, "raw_tile": 0, "is_through_e": false, "is_through_n": false, "is_attack_e": false, "is_attack_n": false, "zone": 0}
+{"seq": 4, "record_type": "TILE_OBSERVATION", "x": 32256, "y": 33279, "raw_tile": 0, "is_through_e": false, "is_through_n": false, "is_attack_e": false, "is_attack_n": false, "zone": 0}
+{"seq": 5, "record_type": "TILE_OBSERVATION", "x": 32767, "y": 33279, "raw_tile": 0, "is_through_e": false, "is_through_n": false, "is_attack_e": false, "is_attack_n": false, "zone": 0}
+{"seq": 6, "record_type": "TILE_OBSERVATION", "x": 32511, "y": 32790, "raw_tile": 15, "is_through_e": true, "is_through_n": true, "is_attack_e": true, "is_attack_n": true, "zone": 0}
+{"seq": 7, "record_type": "TILE_OBSERVATION", "x": 32513, "y": 32789, "raw_tile": 5, "is_through_e": true, "is_through_n": false, "is_attack_e": true, "is_attack_n": false, "zone": 0}
+{"seq": 8, "record_type": "TILE_OBSERVATION", "x": 32518, "y": 32790, "raw_tile": 10, "is_through_e": false, "is_through_n": true, "is_attack_e": false, "is_attack_n": true, "zone": 0}
+{"seq": 9, "record_type": "TILE_OBSERVATION", "x": 32515, "y": 32789, "raw_tile": 12, "is_through_e": false, "is_through_n": false, "is_attack_e": true, "is_attack_n": true, "zone": 0}
+{"seq": 10, "record_type": "TILE_OBSERVATION", "x": 32544, "y": 32805, "raw_tile": 14, "is_through_e": false, "is_through_n": true, "is_attack_e": true, "is_attack_n": true, "zone": 0}
+{"seq": 11, "record_type": "TILE_OBSERVATION", "x": 32577, "y": 32909, "raw_tile": 31, "is_through_e": true, "is_through_n": true, "is_attack_e": true, "is_attack_n": true, "zone": 16}
+{"seq": 12, "record_type": "TILE_OBSERVATION", "x": 32579, "y": 32909, "raw_tile": 16, "is_through_e": false, "is_through_n": false, "is_attack_e": false, "is_attack_n": false, "zone": 16}
+{"seq": 13, "record_type": "TILE_OBSERVATION", "x": 32477, "y": 32851, "raw_tile": 32, "is_through_e": false, "is_through_n": false, "is_attack_e": false, "is_attack_n": false, "zone": 32}

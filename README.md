@@ -18,6 +18,7 @@ Current certified slices:
 001 Combat / Death Lifecycle
 002 Movement / Collision / Local Navigation
 003 Deterministic Cross-Map Portal Transition
+004 Canonical Real Map Import
 
 Legacy Reference:
 Eujenz/182c
@@ -140,6 +141,7 @@ For details on the research methodology, see [Methodology Documentation](docs/me
 | **001** | Combat / Death Lifecycle | **Certified** | [Spec](docs/scenario_001_specification.md) |
 | **002** | Movement / Collision / Local Navigation | **Certified** | [Spec](docs/scenario_002_specification.md) |
 | **003** | Deterministic Cross-Map Portal Transition | **Certified** | [Spec](docs/scenario_003_specification.md) |
+| **004** | Canonical Real Map Import | **Certified** | [Spec](docs/scenario_004_specification.md) |
 
 ### Scenario Breakdown
 
@@ -161,10 +163,19 @@ For details on the research methodology, see [Methodology Documentation](docs/me
   - Deterministic walk-in portal trigger (`portal_ti_to_tid1`)
   - Atomic cross-map transition (remove from Map 0, enter Map 1 at landing coordinates)
   - Map B local navigation to final destination
+- **Scenario 004 (Canonical Real Map Import)**:
+  - Headerless raw byte grid decoding (`maps/Cache/<map_id>.data`)
+  - Resolution of historic 2-byte truncation bug (`W*H - 2` padding)
+  - Bit-exact bitmask semantics (`0x01` East, `0x02` North, `0x10` Safety, `0x20` Combat)
+  - Full Map 0 Talking Island (512x512 = 262,144 cells) geometry digest match (`7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5`)
+  - Standalone map import CLI (`tools/import_real_map.py`)
+  - Dynamic runtime overlays (`DungeonTable` portals, `DoorInstance` states) decoupled from static terrain
+  - Seamless integration into existing Native `WorldMapGrid` and `MovementEngine` without binary coupling
 
 ### Conformance Verification Note
 - **Scenario 003 Differential Conformance**: `PASS` (100% state and domain event equivalence between Legacy Oracle and Native Engine).
   *Note: This certification applies strictly to the verified behavioral scope of Scenario 003 and does not imply comprehensive feature parity with all L1J 1.82 mechanics.*
+- **Scenario 004 Differential Conformance**: `PASS` (100% bit-exact equivalence across all 262,144 cells of Talking Island Map 0 between Legacy Oracle and Native Engine, matching canonical SHA-256 digest `7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5`).
 - **Extraction Source Provenance**: `Eujenz/182c@7eeacbc`. See [Repository Migration Provenance](docs/repository_migration.md).
 
 ---
@@ -193,7 +204,7 @@ For details on the research methodology, see [Methodology Documentation](docs/me
 
 ## Quick Start
 
-Run the certified scenario replays and differential verifier:
+Run the certified scenario replays and differential verifiers:
 
 ```bash
 # Scenario 001: Combat & Death Replay
@@ -207,6 +218,15 @@ python scenario_003_replay.py
 
 # Scenario 003: Differential Conformance against Legacy Oracle
 python scenario_003_differential.py
+
+# Scenario 004: Canonical Real Map Import Replay
+python scenario_004_replay.py
+
+# Scenario 004: Differential Conformance against Legacy Oracle
+python scenario_004_differential.py
+
+# Tool: Import real map binary into canonical format
+python tools/import_real_map.py --map-id 0 --cache-dir <path_to_maps_Cache> --output map0_canonical.json
 
 # Run all test suites
 python -m unittest discover tests
@@ -230,7 +250,7 @@ python -m unittest discover tests
 - [x] **Scenario 001**: Combat / Death Lifecycle
 - [x] **Scenario 002**: Movement / Collision / Local Navigation
 - [x] **Scenario 003**: Cross-Map Portal Transition
-- [ ] **Scenario 004**: Canonical Real Map Import *(Planned)*
+- [x] **Scenario 004**: Canonical Real Map Import
 - [ ] Multi-Actor World Simulation
 - [ ] NPC & Object Interaction
 - [ ] Items & Equipment Systems
