@@ -9,7 +9,7 @@ L1J Headless is a standalone, lightweight simulation engine that executes Lineag
                            │
              ┌─────────────┴─────────────┐
              │                           │
-         World Rules                 Automation
+         World Rules                 Automation (Future)
              │                           │
        ┌─────┴─────┐               Planner / Agent
        │           │
@@ -19,7 +19,7 @@ L1J Headless is a standalone, lightweight simulation engine that executes Lineag
              ↓
          World State
              ↓
-      Text UI / API / Agent
+      Text UI / API / Agent (Future)
 ```
 
 ---
@@ -54,13 +54,45 @@ L1J Headless is a standalone, lightweight simulation engine that executes Lineag
 - Manages entity death transitions, reward attribution (EXP, Lawful alignment), and drop item transfers.
 
 ### 2.6 Wire Codec (`native_engine/codec.py`)
-- Optional presentation layer translating native domain events into bit-exact Lineage 182 packet byte streams (`S_BasePacket` 8-byte boundary alignment).
-- Verifies binary protocol conformance without establishing actual network sockets.
+- Serves strictly as a **wire serialization compatibility primitive for conformance testing** (e.g. Scenario 001 packet layout validation).
+- Validates binary wire layout (`S_BasePacket` 8-byte alignment) against legacy reference standards.
+- **Not** a live client network stack or socket protocol server.
 
 ---
 
-## 3. Decoupling & Independence Guarantees
+## 3. Current Implementation Status vs. Future Modules
+
+```text
+Currently Certified & Active:
+  Headless World
+      ├── World State
+      ├── Map Geometry
+      ├── Local Navigation (Same-map A*)
+      └── Cross-Map Transition (Atomic portal handover)
+
+Planned / Future Modules:
+  Automation & Orchestration
+      ├── Goal Planner
+      ├── World Route Planner (Multi-map route synthesis)
+      └── Autonomous Agent Loop
+```
+
+---
+
+## 4. Scenario Maturity & Coverage
+
+The scenarios currently certified in this repository represent **targeted vertical slices**, not full game feature parity:
+- **Scenario 001**: Combat / Death Lifecycle (single entity pair).
+- **Scenario 002**: Spatial Movement, Collision & Local Navigation (synthetic grid).
+- **Scenario 003**: Deterministic Cross-Map Portal Transition (Map 0 → Map 1).
+
+Each slice establishes verified behavioral compatibility for its isolated scope.
+
+---
+
+## 5. Decoupling & Independence Guarantees
 
 - **Zero Legacy Java Dependencies**: No JVM invocation, no Java class reflection, no JNI bindings.
 - **Zero Database Server Dependencies**: State fixtures and static geometry tables are provided through declarative contracts.
+- **Zero Oracle Coupling at Runtime**: The native engine executes autonomously from contracts and never reads oracle traces to make decisions.
 - **Strict Separation of Concerns**: Planners do not mutate state; movement arbiters do not plan paths; transition managers do not compute local routes.

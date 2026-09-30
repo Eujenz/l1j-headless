@@ -22,7 +22,7 @@ This migration establishes a formal boundary between legacy evidence and modern 
 
 2. **Decoupling**:
    - Keeping the native runtime in a clean repository ensures that the runtime never inadvertently depends on the legacy Java classpath, local filesystem paths, or legacy database connections.
-   - It eliminates 1.7+ GB of legacy client, binary, and map assets from the active development tree, allowing fast CI and lightweight deployment.
+   - It keeps large legacy client, binary, map, database, and server artifacts outside the active Native Runtime repository, ensuring fast CI and lightweight deployment.
 
 ---
 
@@ -32,7 +32,7 @@ The following components were extracted from `Eujenz/182c@7eeacbc`:
 
 1. **Native Engine (`native_engine/`)**:
    - `__init__.py`: Package initialization.
-   - `codec.py`: Wire encoder for Lineage 182 packet structures.
+   - `codec.py`: Wire encoder for Lineage 182 packet structures (conformance testing primitive).
    - `combat.py`: HitFigure and DmgSystem combat calculators.
    - `events.py`: Domain event definitions.
    - `map.py`: 2D tile grid with `IsThroughObject` bitmask evaluation.
@@ -69,14 +69,13 @@ The following components were extracted from `Eujenz/182c@7eeacbc`:
    - `tests/test_scenarios.py`
 
 5. **Oracle & Native Traces (Certification Evidence)**:
-   - `oracle_trace_scenario_001.jsonl`
-   - `oracle_trace_scenario_001_runA.jsonl`
-   - `oracle_trace_scenario_001_runB.jsonl`
-   - `oracle_trace_scenario_002.jsonl`
-   - `oracle_trace_scenario_003.jsonl`
-   - `native_trace.jsonl`
-   - `native_trace_002.jsonl`
-   - `native_trace_003.jsonl`
+   - `oracle_trace_scenario_001.jsonl`: Certified legacy oracle trace for Scenario 001.
+   - `oracle_trace_scenario_002.jsonl`: Certified legacy oracle trace for Scenario 002.
+   - `oracle_trace_scenario_003.jsonl`: Certified legacy oracle trace for Scenario 003.
+   - `native_trace.jsonl`: Emitted native execution trace for Scenario 001.
+   - `native_trace_002.jsonl`: Emitted native execution trace for Scenario 002.
+   - `native_trace_003.jsonl`: Emitted native execution trace for Scenario 003.
+   *(Note: Redundant duplicate files `oracle_trace_scenario_001_runA.jsonl` and `runB.jsonl` were audited, verified byte-identical to `oracle_trace_scenario_001.jsonl`, and removed during post-migration baseline cleanup.)*
 
 ---
 

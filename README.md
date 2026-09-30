@@ -52,11 +52,11 @@ The long-term vision is to build a headless Lineage 1 world runtime that execute
 ```text
 Player Goal
     ↓
-Automation Agent
+Automation Agent (Future)
     ↓
 World Observation
     ↓
-World Navigation
+World Navigation (Future)
     ↓
 Local Navigation
     ↓
@@ -65,7 +65,7 @@ Movement / Action
 World State
 ```
 
-For instance, an automation agent could process high-level instructions:
+For instance, an automation agent could process high-level goals:
 > *"Head to northern Talking Island to hunt monsters. If no targets are found, navigate to Silver Knight Town. Return to town if HP drops below safety threshold."*
 
 The autonomous runtime handles the complete loop:
@@ -82,7 +82,7 @@ The autonomous runtime handles the complete loop:
                            │
              ┌─────────────┴─────────────┐
              │                           │
-         World Rules                 Automation
+         World Rules                 Automation (Future)
              │                           │
        ┌─────┴─────┐               Planner / Agent
        │           │
@@ -92,12 +92,15 @@ The autonomous runtime handles the complete loop:
              ↓
          World State
              ↓
-      Text UI / API / Agent
+      Text UI / API / Agent (Future)
 ```
 
 - **Local Navigation**: Resolves same-map movement, static obstacle avoidance, and canonical 8-direction pathfinding.
 - **Cross-Map Transition**: Evaluates spatial triggers (portals, stairs, teleports) and executes atomic state handoffs between discrete map topologies.
 - **World Route Planning (Future)**: Composes cross-map transitions and local A* segments into end-to-end multi-map routes.
+- **Wire Codec (`native_engine/codec.py`)**: Serves strictly as a wire serialization compatibility primitive for conformance testing (e.g. Scenario 001 packet layout validation). It is not a live network socket stack or client protocol server.
+
+For further architectural details, see [Architecture Overview](docs/architecture.md).
 
 ---
 
@@ -124,16 +127,19 @@ All data and behavioral assumptions are assigned explicit provenance tiers:
 - **`UNKNOWN`**: Unverified edge case behavior.
 
 > **Key Rule**: Legacy implementation ≠ Compatibility contract; Modern design ≠ Legacy fact.
+> **Coverage Rule**: Behavioral Coverage ≠ Full Game Coverage. Passing a slice certifies conformance for that slice's defined scope, not whole-game parity.
+
+For details on the research methodology, see [Methodology Documentation](docs/methodology.md).
 
 ---
 
 ## Current Status & Certified Milestones
 
-| Scenario | Scope | Conformance Status |
-| :--- | :--- | :--- |
-| **001** | Combat / Death Lifecycle | **Certified** |
-| **002** | Movement / Collision / Local Navigation | **Certified** |
-| **003** | Deterministic Cross-Map Portal Transition | **Certified** |
+| Scenario | Scope | Conformance Status | Specification |
+| :--- | :--- | :--- | :--- |
+| **001** | Combat / Death Lifecycle | **Certified** | [Spec](docs/scenario_001_specification.md) |
+| **002** | Movement / Collision / Local Navigation | **Certified** | [Spec](docs/scenario_002_specification.md) |
+| **003** | Deterministic Cross-Map Portal Transition | **Certified** | [Spec](docs/scenario_003_specification.md) |
 
 ### Scenario Breakdown
 
@@ -156,9 +162,10 @@ All data and behavioral assumptions are assigned explicit provenance tiers:
   - Atomic cross-map transition (remove from Map 0, enter Map 1 at landing coordinates)
   - Map B local navigation to final destination
 
-### Conformance Verification
-- **Scenario 003 Differential Conformance**: `PASS` (100% state and domain event equivalence)
-- **Extraction Source Provenance**: `Eujenz/182c@7eeacbc`
+### Conformance Verification Note
+- **Scenario 003 Differential Conformance**: `PASS` (100% state and domain event equivalence between Legacy Oracle and Native Engine).
+  *Note: This certification applies strictly to the verified behavioral scope of Scenario 003 and does not imply comprehensive feature parity with all L1J 1.82 mechanics.*
+- **Extraction Source Provenance**: `Eujenz/182c@7eeacbc`. See [Repository Migration Provenance](docs/repository_migration.md).
 
 ---
 
