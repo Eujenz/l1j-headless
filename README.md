@@ -19,6 +19,7 @@ Current certified slices:
 002 Movement / Collision / Local Navigation
 003 Deterministic Cross-Map Portal Transition
 004 Canonical Real Map Import
+005 Real Multi-Map Route Planning
 
 Legacy Reference:
 Eujenz/182c
@@ -142,6 +143,7 @@ For details on the research methodology, see [Methodology Documentation](docs/me
 | **002** | Movement / Collision / Local Navigation | **Certified** | [Spec](docs/scenario_002_specification.md) |
 | **003** | Deterministic Cross-Map Portal Transition | **Certified** | [Spec](docs/scenario_003_specification.md) |
 | **004** | Canonical Real Map Import | **Certified** | [Spec](docs/scenario_004_specification.md) |
+| **005** | Real Multi-Map Route Planning | **Certified** | [Spec](docs/scenario_005_specification.md) |
 
 ### Scenario Breakdown
 
@@ -171,11 +173,20 @@ For details on the research methodology, see [Methodology Documentation](docs/me
   - Standalone map import CLI (`tools/import_real_map.py`)
   - Dynamic runtime overlays (`DungeonTable` portals, `DoorInstance` states) decoupled from static terrain
   - Seamless integration into existing Native `WorldMapGrid` and `MovementEngine` without binary coupling
+- **Scenario 005 (Real Multi-Map Route Planning)**:
+  - End-to-end multi-map pathfinding across Real Map 0 and Real Map 1
+  - Topological graph search over world maps (`WorldRoutePlanner` via BFS)
+  - Strict two-level separation: WorldRoute topology vs. intra-map coordinate planning (`AStarPlanner`)
+  - Execution coordinator (`WorldRouteExecutor`) managing approach, portal trigger, and exit legs
+  - Real terrain portal approach on Map 0 to `(32477, 32851)` without synthetic geometries
+  - Atomic cross-map state handoff to Map 1 landing `(32669, 32802, heading 4)`
+  - Real Map 1 local navigation to destination `(32671, 32804)`
 
 ### Conformance Verification Note
 - **Scenario 003 Differential Conformance**: `PASS` (100% state and domain event equivalence between Legacy Oracle and Native Engine).
   *Note: This certification applies strictly to the verified behavioral scope of Scenario 003 and does not imply comprehensive feature parity with all L1J 1.82 mechanics.*
 - **Scenario 004 Differential Conformance**: `PASS` (100% bit-exact equivalence across all 262,144 cells of Talking Island Map 0 between Legacy Oracle and Native Engine, matching canonical SHA-256 digest `7fe59f4a4f28fa0c87e69c67506ea578b2860d48e11ef61ffd7b66aef97ff9e5`).
+- **Scenario 005 Differential Conformance**: `PASS` (100% conformance across L0 Map Integrity, L1 Transition Integrity, L2 World Topology, L3 Real Approach, L4 Atomic Transition Commit, and L5 Real Destination Arrival).
 - **Extraction Source Provenance**: `Eujenz/182c@7eeacbc`. See [Repository Migration Provenance](docs/repository_migration.md).
 
 ---
@@ -225,6 +236,12 @@ python scenario_004_replay.py
 # Scenario 004: Differential Conformance against Legacy Oracle
 python scenario_004_differential.py
 
+# Scenario 005: Real Multi-Map Route Planning Replay
+python scenario_005_replay.py
+
+# Scenario 005: Differential Conformance against Legacy Oracle
+python scenario_005_differential.py
+
 # Tool: Import real map binary into canonical format
 python tools/import_real_map.py --map-id 0 --cache-dir <path_to_maps_Cache> --output map0_canonical.json
 
@@ -251,6 +268,7 @@ python -m unittest discover tests
 - [x] **Scenario 002**: Movement / Collision / Local Navigation
 - [x] **Scenario 003**: Cross-Map Portal Transition
 - [x] **Scenario 004**: Canonical Real Map Import
+- [x] **Scenario 005**: Real Multi-Map Route Planning
 - [ ] Multi-Actor World Simulation
 - [ ] NPC & Object Interaction
 - [ ] Items & Equipment Systems
