@@ -12,6 +12,10 @@
 > 4. 怪物的動作時間來自 `Monster.modespeed`（由 `client/list.spr` 初始化），未命中時之普適 Fallback 為 **`1000 ms`**。
 > 5. 怪物移動判定動作為 `GfxMode`，攻擊判定動作為 `GfxMode + 1`。
 
+> [!NOTE]
+> 關於 `client/list.spr` 資料格式、`ClientFileLoad` 字節碼解密 (40ms 刻度) 與代表性怪物數值表，請參見專案深度分析文件：
+> - [docs/archaeology/monster_modespeed_analysis.md](file:///c:/Users/p0282768/Documents/l1j-headless/docs/archaeology/monster_modespeed_analysis.md)
+
 ---
 
 ## 2. 呼叫鏈完整追蹤 (Complete Call Chain)
