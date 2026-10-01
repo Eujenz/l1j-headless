@@ -30,11 +30,27 @@ from native_engine.equipment import EquipmentManager, build_weapon_from_contract
 from native_engine.rng import NativeRng
 
 
+def resolve_path(path: str) -> str:
+    """Resolve a relative path against CWD and repo root (script directory)."""
+    if os.path.isabs(path) and os.path.exists(path):
+        return path
+    if os.path.exists(path):
+        return os.path.abspath(path)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate = os.path.join(script_dir, path)
+    if os.path.exists(candidate):
+        return candidate
+    return path
+
+
 def find_legacy_root(cli_root: Optional[str] = None) -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
         cli_root,
         "../182c",
         "../Lineage182c",
+        os.path.join(script_dir, "../182c"),
+        os.path.join(script_dir, "../Lineage182c"),
         "C:/Users/p0282768/Documents/Gemini/Lineage182c"
     ]
     for c in candidates:
@@ -51,7 +67,8 @@ def find_legacy_root(cli_root: Optional[str] = None) -> str:
 # ---------------------------------------------------------------------------
 
 def initialize_s006_session(contract_path: str = "scenario_006_contract.json", legacy_root_arg: Optional[str] = None) -> GameSession:
-    with open(contract_path, "r", encoding="utf-8") as f:
+    resolved_contract = resolve_path(contract_path)
+    with open(resolved_contract, "r", encoding="utf-8") as f:
         contract = json.load(f)
 
     legacy_root = find_legacy_root(legacy_root_arg)
@@ -131,7 +148,8 @@ def initialize_s007_session(
     legacy_root_arg: Optional[str] = None,
     seed_override: Optional[int] = None,
 ) -> GameSession:
-    with open(contract_path, "r", encoding="utf-8") as f:
+    resolved_contract = resolve_path(contract_path)
+    with open(resolved_contract, "r", encoding="utf-8") as f:
         contract = json.load(f)
 
     legacy_root = find_legacy_root(legacy_root_arg)
