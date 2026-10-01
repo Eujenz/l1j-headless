@@ -96,3 +96,50 @@ class AutonomousNavigator:
             return True, all_events
 
         return False, all_events
+
+    @staticmethod
+    def goto_with_hook(
+        actor, target_x: int, target_y: int, engine: MovementEngine,
+        start_tick: int = 100,
+        step_hook=None,
+        log_callback=None,
+    ) -> Tuple[bool, List[DomainEvent]]:
+        """
+        Same as goto(), but calls step_hook(log_callback) after each successful step.
+        step_hook should return List[DomainEvent] (e.g. combat events from encounter).
+        If actor.is_dead becomes True, navigation stops early.
+        """
+        all_events: List[DomainEvent] = []
+        headings = AStarPlanner.find_path(engine.map_grid, actor.x, actor.y, target_x, target_y)
+
+        if headings is None:
+            return False, all_events
+
+        cur_tick = start_tick
+        for h in headings:
+            if getattr(actor, 'is_dead', False):
+                return False, all_events
+
+            cur_tick += 10
+            step_events = engine.execute_cmd_move(actor, h, tick=cur_tick)
+            all_events.extend(step_events)
+
+            if any(ev.__class__.__name__ == 'MoveBlocked' for ev in step_events):
+                return False, all_events
+
+            # Call encounter hook after successful step
+            if step_hook is not None:
+                hook_events = step_hook(log_callback=log_callback)
+                if hook_events:
+                    all_events.extend(hook_events)
+                    if step_events:
+                        cur_tick = hook_events[-1].tick if hook_events else cur_tick
+
+            if getattr(actor, 'is_dead', False):
+                return False, all_events
+
+        if actor.x == target_x and actor.y == target_y:
+            all_events.append(DestinationReached(tick=cur_tick, entity_id=actor.id, target_x=target_x, target_y=target_y))
+            return True, all_events
+
+        return False, all_events
