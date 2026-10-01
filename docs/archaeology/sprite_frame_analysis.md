@@ -225,8 +225,12 @@ confirmed_by: "Eujenz/182c"
 
 ---
 
-## 11. 怪物時間機制考古連結 (Monster Timing Archaeology)
+## 11. 怪物時間機制與動作語義考古連結 (Further Archaeology)
 
-關於怪物 AI 之驅動機制、`MonAi` 30ms 輪詢循環、`Monster.modespeed` 與 `client/list.spr` 之完整分析，請參閱專屬文檔：
-- [docs/archaeology/monster_timing_analysis.md](file:///c:/Users/p0282768/Documents/l1j-headless/docs/archaeology/monster_timing_analysis.md)
-- 結論判定：**`SPRITE_FRAME_PC_ONLY`** (怪物與玩家時間系統完全隔離)。
+- 怪物時間機制與 `MonAi` 30ms 輪詢循環深度分析：
+  [docs/archaeology/monster_timing_analysis.md](file:///c:/Users/p0282768/Documents/l1j-headless/docs/archaeology/monster_timing_analysis.md)
+- 怪物 `modespeed` 與 `client/list.spr` (40ms 刻度) 深度分析：
+  [docs/archaeology/monster_modespeed_analysis.md](file:///c:/Users/p0282768/Documents/l1j-headless/docs/archaeology/monster_modespeed_analysis.md)
+- 動作時序語義（即時傷害結算 vs 動作冷卻間隔）：
+  [docs/archaeology/action_timing_semantics.md](file:///c:/Users/p0282768/Documents/l1j-headless/docs/archaeology/action_timing_semantics.md)
+- 結論判定：**`SPRITE_FRAME_PC_ONLY`** (怪物與玩家時間系統完全隔離) 且 **`DAMAGE_TIMING = IMMEDIATE`** (傷害結算即時無前搖)。
