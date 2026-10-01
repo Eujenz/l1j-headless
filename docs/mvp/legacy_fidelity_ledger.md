@@ -1,8 +1,8 @@
-# L1J 1.82 Legacy Fidelity Ledger (MVP-02)
+# L1J 1.82 Legacy Fidelity Ledger (MVP-03: Multi-Actor Persistent Native World)
 
 ## 1. 說明與分類標準
 
-本文件對目前已進入 `l1j-headless` MVP-01 / MVP-02 運行階段之所有遊戲機制（Game Mechanics）、數值、公式與行為進行嚴格的 **Legacy Fidelity Audit**。
+本文件對目前已進入 `l1j-headless` MVP-01 / MVP-02 / MVP-03 運行階段之所有遊戲機制（Game Mechanics）、數值、公式與行為進行嚴格的 **Legacy Fidelity Audit**。
 
 任何機制不得以「代碼能跑通」或「經驗觀察」擅自宣稱為真實伺服器規格。所有機制必須嚴格分類為以下五種標準之一：
 
@@ -19,25 +19,25 @@
 | Mechanic (機制) | Implementation (目前實作) | L1J 1.82 Evidence (原始證據) | Classification | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **Player Movement Interval** | 640 ms (Virtual Clock event gate) | `sprite_frame.sql:81, 118` (action 0/4 `walk` = 640ms), `SprTable.java:60` | `LEGACY_RULE` | **CONFIRMED** |
-| **Weapon Attack Interval (Knight Sword)** | 920 ms (Virtual Clock event gate) | `sprite_frame.sql:84` (`女騎士` GFX 48 action 5 = 920ms), `SprTable.java:84`, `canonical_timing_spec.md:350` | `LEGACY_RULE` | **CONFIRMED** (MVP-02 修正) |
+| **Dynamic PC Attack Timing** | 動態解析：Player GFX + Action + Weapon（GFX 48 女騎單手劍 920ms、GFX 61 男騎單手劍 880ms、GFX 0 王子 1000ms、GFX 37 女妖 760ms） | `SprTable.java:84`, `CheckSpeed.java:89`, `sprite_frame.sql:28-118` | `LEGACY_RULE` | **CONFIRMED** (MVP-03 動態化) |
 | **Attack Damage Timing** | Immediate ($T = 0$) | `PcInstance.java:600-650`, `C_Attack.java:26`, `canonical_timing_spec.md:214` | `LEGACY_RULE` | **CONFIRMED** |
 | **Damage Formula (Physical)** | `CanonicalCombat.calculate_damage()` | `PcInstance.java:613`, `CalcStat.calcDmg()`, `C_Attack.java` | `DERIVED_CANONICAL` | **CONFIRMED** |
 | **Hit Formula (HitFigure)** | `CanonicalCombat.resolve_hit()` | `PcInstance.java:606`, `CalcStat.calcHit()` | `DERIVED_CANONICAL` | **CONFIRMED** |
-| **Monster Movement Timing** | `modespeed(0)` from `client/list.spr` | `MonsterTable.java:76`, `ClientFileLoad.java:42`, `modespeed[0]` (單位和 × 40ms) | `LEGACY_RULE` | **CONFIRMED** |
-| **Monster Attack Timing** | `modespeed(1)` from `client/list.spr` | `MonsterTable.java:77`, `ClientFileLoad.java:42`, `modespeed[1]` (單位和 × 40ms) | `LEGACY_RULE` | **CONFIRMED** |
+| **Autonomous Monster AI Timing** | 怪物透過 Scheduler 自主事件驅動，追擊使用 `modespeed(0)`，攻擊使用 `modespeed(1)` | `MonsterTable.java:76`, `ClientFileLoad.java:42`, `MonAi.java:85-88`, `MonsterInstance.java:293-305` | `LEGACY_RULE` | **CONFIRMED** (MVP-03 自主化) |
+| **Monster Agro & Pursuit** | 感知範圍內怪物自主鎖定目標並主動追逐 | `MonsterInstance.java:293`, `NpcInstance.java:160` | `LEGACY_RULE` | **CONFIRMED** |
+| **Monster Respawn Lifecycle** | 死亡移出地圖，`re_spawn * 1000ms` 後透過 `respawn_monster` 在合法格重生滿血 | `MonsterInstance.java:518-551`, `monster_spawnlist.sql` (`re_spawn` 欄位) | `LEGACY_RULE` | **CONFIRMED** (MVP-03 重生化) |
 | **Monster Death / Despawn** | HP <= 0 即時判定死亡並移出 active map | `MonsterInstance.java:450`, `NpcInstance.java` (death check) | `LEGACY_RULE` | **CONFIRMED** |
-| **Monster EXP Distribution** | 漂浮之眼 +50, 人形僵屍 +37 | `db/lineage/monster.sql:57` (漂浮之眼 exp=50), `monster.sql:63` (人形僵屍 exp=37) | `LEGACY_RULE` | **CONFIRMED** |
+| **Monster EXP Distribution** | 漂浮之眼 +50, 人形僵屍 +37, 狼人 +45, 骷髏 +70 | `db/lineage/monster.sql:57` 等 | `LEGACY_RULE` | **CONFIRMED** |
 | **Level Progression Thresholds** | Lv1: 20 EXP, Lv2: 45 EXP, Lv3: 80 EXP | `db/lineage/exp.sql:27-29` (`bonus` 欄位: 20, 45, 80) | `LEGACY_RULE` | **CONFIRMED** |
 | **Level Up HP Growth** | 騎士升級固定 +9 MaxHP (con<=15) | `Character.java:980-998` `start_hp = 6 + rand(1..6)`。目前採用中位數 3 (6+3=9) 作為確定性測試替代 | `CONTROLLED_SUBSTITUTION` | **VALIDATED** |
+| **Natural HP Regeneration Event**| 每 10 秒固定排程回血 +5 HP（非步進輪詢，為獨立世界事件） | `HpMpTimer.java:48-73` (`cha.isHpTic()`, `cha.hpTic()`) | `LEGACY_RULE` | **CONFIRMED** (MVP-03 排程化) |
 | **Drop Table Contents** | 漂浮之眼肉(166)、骷髏骨(288)、銀長劍(102)等 | `db/lineage/monster_item_drop.sql` (各怪物 monid 關聯表) | `LEGACY_RULE` | **CONFIRMED** |
 | **Drop Chance Calculation** | 機率採用萬分比 `rand(1, 10000) <= chance` | `MonsterItemDropTable.java:57` (`Util.rand(1, 10000) <= d.getChance() * Config.RATE_DROP`) | `LEGACY_RULE` | **CONFIRMED** |
 | **Drop Quantity** | `count_min` 至 `count_max` 隨機區間 | `MonsterItemDropTable.java:73` (`Util.rand(d.getCount_min(), d.getCount_max())`) | `LEGACY_RULE` | **CONFIRMED** |
 | **Ground Item Generation** | 掉落物生成於怪物座標 $(x, y)$ | `C_ItemDrop.java`, `MonsterItemDropTable.java`, `WorldInstance.java` | `LEGACY_RULE` | **CONFIRMED** |
 | **Loot (Item Pickup)** | 靠近至目標格後拾取進 Inventory | `C_ItemPickup.java:33` (`L1Object.pickup()`), `PcInstance.java` | `LEGACY_RULE` | **CONFIRMED** |
-| **Player Inventory Structure** | 具備 item_id, count 之清單式容器 | `PcInventory.java`, `ItemInstance.java` | `DERIVED_CANONICAL` | **CONFIRMED** |
 | **Target Selection Policy** | 優先攻擊近戰目標、檢查 A* 可達性、避開高等級怪物 | Bot 自主感知與啟發式決策樹 | `BOT_POLICY` | **AGENT_SPECIFIC** |
-| **Roaming / Patrol Policy** | 無目標時沿地圖幾何漫步搜尋敵人 | Bot 自主尋路與巡邏漫遊狀態機 | `BOT_POLICY` | **AGENT_SPECIFIC** |
-| **HP TIC Regeneration** | 每 10 秒回血 +5 HP | `HpMpTimer.java:62-63` (`cha.isHpTic()`, `cha.hpTic()`) | `CONTROLLED_SUBSTITUTION` | **VALIDATED** |
+| **Roaming / Patrol Policy** | 無目標時沿地圖幾何漫步搜尋敵人，永不異常終止 | Bot 自主尋路與巡邏漫遊狀態機 | `BOT_POLICY` | **AGENT_SPECIFIC** |
 
 ---
 

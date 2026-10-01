@@ -57,7 +57,7 @@
       }
     ],
     "equipped_weapon_id": 1,
-    "gfx": 61,
+    "gfx": 48,
     "gfx_mode": 4,
     "move_speed_ms": 640,
     "attack_speed_ms": 920

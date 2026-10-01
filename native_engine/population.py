@@ -205,6 +205,7 @@ class PopulationManager:
                     gfx=mdef.gfx,
                     move_speed_ms=mdef.move_speed_ms,
                     attack_speed_ms=mdef.attack_speed_ms,
+                    re_spawn=sd.re_spawn,
                 )
                 if sd.map_id not in self._map_monsters:
                     self._map_monsters[sd.map_id] = []
@@ -244,8 +245,49 @@ class PopulationManager:
         return sorted([m for m in monsters if not m.is_dead], key=lambda m: m.uid)
 
     def despawn(self, monster: Monster) -> None:
-        """Mark monster as dead (despawned). Simple MVP despawn — no respawn timer."""
+        """Mark monster as dead (despawned)."""
         monster.is_dead = True
+        monster.target = None
+
+    def respawn_monster(self, monster: Monster, map_grid: Optional[any] = None) -> Position:
+        """
+        Respawn dead monster instance back to life using its SpawnDefinition.
+        LEGACY_OBSERVED parity: MonsterInstance.reSpawn() (MonsterInstance.java:527-551)
+        Finds a valid passable tile within spawn bounds and resets HP/alive status.
+        """
+        from .movement import can_move
+
+        sd = next((s for s in self.spawn_defs if s.spawn_uid == monster.spawn_uid), None)
+        bounds = MAP_BOUNDS.get(monster.pos.map_id)
+        if bounds:
+            x1, x2, y1, y2 = bounds
+        else:
+            x1, x2, y1, y2 = (monster.pos.x - 5, monster.pos.x + 5, monster.pos.y - 5, monster.pos.y + 5)
+
+        new_x, new_y = monster.pos.x, monster.pos.y
+        if sd:
+            for _ in range(50):
+                if sd.loc_size == 0:
+                    cand_x = self.rng.rand(x1, x2, "RespawnX")
+                    cand_y = self.rng.rand(y1, y2, "RespawnY")
+                else:
+                    cand_x = self.rng.rand(max(x1, sd.spawn_x - sd.loc_size), min(x2, sd.spawn_x + sd.loc_size), "RespawnX")
+                    cand_y = self.rng.rand(max(y1, sd.spawn_y - sd.loc_size), min(y2, sd.spawn_y + sd.loc_size), "RespawnY")
+
+                if map_grid is not None:
+                    if not map_grid.is_in_bounds(cand_x, cand_y):
+                        continue
+                    if not any(can_move(map_grid, cand_x, cand_y, h)[0] for h in range(8)):
+                        continue
+                new_x, new_y = cand_x, cand_y
+                break
+
+        monster.hp = monster.max_hp
+        monster.is_dead = False
+        monster.pos.x = new_x
+        monster.pos.y = new_y
+        monster.target = None
+        return monster.pos
 
     def get_def(self, monster_id: int) -> Optional[MonsterDefinition]:
         """Returns the MonsterDefinition for a given monster_id."""

@@ -3,7 +3,7 @@ native_engine/model.py - Minimal Domain Models for L1J Headless
 Strictly decoupled from socket, packet, database, and Java runtime classes.
 """
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import List, Optional, Tuple, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .map import WorldMapGrid
@@ -125,8 +125,32 @@ class Monster:
     gfx: int = 0
     move_speed_ms: int = 800
     attack_speed_ms: int = 1200
-    next_move_at: int = 0
-    next_attack_at: int = 0
+    target: Optional[Any] = None
+    re_spawn: int = 300
+
+    @property
+    def x(self) -> int:
+        return self.pos.x
+
+    @x.setter
+    def x(self, val: int):
+        self.pos.x = val
+
+    @property
+    def y(self) -> int:
+        return self.pos.y
+
+    @y.setter
+    def y(self, val: int):
+        self.pos.y = val
+
+    @property
+    def map_id(self) -> int:
+        return self.pos.map_id
+
+    @map_id.setter
+    def map_id(self, val: int):
+        self.pos.map_id = val
 
 @dataclass
 class CanonicalMapDefinition:

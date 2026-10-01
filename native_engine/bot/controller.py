@@ -17,6 +17,7 @@ from ..combat import CanonicalCombat
 from ..navigation import AStarPlanner
 from ..movement import MovementEngine, can_move, HEADING_DELTA
 from ..temporal import VirtualClock, Scheduler
+from ..spr_action import get_pc_action_interval
 from .perception import PerceptionSystem, PerceptionSnapshot
 from .policy import BotPolicy, BotState, BotAction, BotActionType
 from .drop import DropSystem, GroundDrop
@@ -37,6 +38,7 @@ class HeadlessBot:
         scheduler: Optional[Scheduler] = None,
         rng: Optional[any] = None,
         log_callback: Optional[Callable[[str], None]] = None,
+        respawn_delay_override_ms: Optional[int] = None,
     ):
         self.player = player
         self.world_maps = world_maps
@@ -67,14 +69,24 @@ class HeadlessBot:
         self.items_looted: List[Item] = []
         self.trace_log: List[str] = []
 
-        # Action Intervals (Canonical from canonical_timing_spec.md: Knight Sword = 920ms)
+        # Action Intervals (Resolved dynamically via SprTable: GFX + Weapon)
         self.move_interval_ms = getattr(player, "move_speed_ms", 640)
-        self.attack_interval_ms = getattr(player, "attack_speed_ms", 920)
+        self.attack_interval_ms = get_pc_action_interval(
+            player.gfx, player.equipped_weapon, fallback=getattr(player, "attack_speed_ms", 920)
+        )
+        self.player.attack_speed_ms = self.attack_interval_ms
+
+        # Autonomous Multi-Actor State
+        self._monster_busy_until: Dict[int, int] = {}
+        self.respawn_delay_override_ms = respawn_delay_override_ms
+        self.respawn_count = 0
 
         # Roaming wander direction counter
         self._roam_heading = 0
         self._roam_steps_remaining = 0
-        self._last_hp_tic = 0
+
+        # Recurring HP regeneration timer (10s TIC, HpMpTimer.java:48-73)
+        self.scheduler.schedule_after(10000, self._hp_mp_regen_tick, name="hp_mp_regen_tick")
 
         # Starter supplies: ensure player has basic Red Potions (item 104) for persistent hunt
         if not any(item.item_id == 104 for item in self.player.inventory.items):
@@ -82,6 +94,18 @@ class HeadlessBot:
             self.player.inventory.add(starter_pot)
 
         self._log(f"PLAYER SPAWN: {player.name} (Lv{player.level} HP:{player.hp}/{player.max_hp}) at Map {player.map_id} ({player.x}, {player.y}) with {player.equipped_weapon.name if player.equipped_weapon else 'Bare Hands'}")
+
+    def _hp_mp_regen_tick(self) -> None:
+        """
+        Natural HP regeneration TIC (HpMpTimer.java: 10s TIC).
+        Recurring world event scheduled on VirtualClock.
+        """
+        if not self.player.is_dead:
+            if self.player.hp < self.player.max_hp:
+                regen = 5
+                self.player.hp = min(self.player.max_hp, self.player.hp + regen)
+                self._log(f"HP_REGEN: Player recovered {regen} HP -> HP: {self.player.hp}/{self.player.max_hp}")
+            self.scheduler.schedule_after(10000, self._hp_mp_regen_tick, name="hp_mp_regen_tick")
 
     def _log(self, message: str) -> None:
         """Record formatted timestamped event trace."""
@@ -105,13 +129,6 @@ class HeadlessBot:
 
         self._sync_map_grid()
 
-        # Natural HP regeneration TIC (Legacy HpMpTimer: 10s TIC)
-        if self.clock.now() - self._last_hp_tic >= 10000:
-            self._last_hp_tic = self.clock.now()
-            if self.player.hp < self.player.max_hp and not self.player.is_dead:
-                regen = 5
-                self.player.hp = min(self.player.max_hp, self.player.hp + regen)
-
         # 1. Perception
         snapshot = self.perception_sys.perceive(
             player=self.player,
@@ -119,6 +136,15 @@ class HeadlessBot:
             ground_drops=self.drop_system.ground_drops,
             active_target=self.active_target,
         )
+
+        # Autonomous agro check: nearby aggressive monsters acquire target and advance
+        for m in snapshot.nearby_monsters:
+            if not m.is_dead and m.target is None:
+                dist = max(abs(m.x - self.player.x), abs(m.y - self.player.y))
+                if dist <= 3 or getattr(m, "agro", False):
+                    m.target = self.player
+                    if self.clock.now() >= self._monster_busy_until.get(m.uid, 0):
+                        self._schedule_monster_action(m, delay_ms=30)
 
         # 2. Policy Decision
         next_state, action = self.policy.decide_next_action(
@@ -245,6 +271,7 @@ class HeadlessBot:
         # 3. Monster Death Check
         if new_hp == 0:
             monster.is_dead = True
+            monster.target = None
             self.population.despawn(monster)
             self.kills += 1
 
@@ -264,41 +291,129 @@ class HeadlessBot:
             for d in drops:
                 self._log(f"GROUND DROP: {monster.name} dropped {d.item.name} x{d.item.count} at ({d.pos.x}, {d.pos.y})")
 
+            # Schedule Canonical Respawn
+            respawn_delay_ms = (
+                self.respawn_delay_override_ms
+                if self.respawn_delay_override_ms is not None
+                else max(1000, monster.re_spawn * 1000)
+            )
+            self.scheduler.schedule_after(
+                respawn_delay_ms,
+                lambda m=monster: self._execute_respawn(m),
+                name=f"respawn_{monster.uid}",
+            )
+
             self.active_target = None
             # Schedule next step after attack interval
             self.scheduler.schedule_after(self.attack_interval_ms, self.step, name="attack_action_gate")
             return
 
-        # 4. Monster Counter-Attack (if monster survived)
-        m_min = monster.min_dmg
-        m_max = monster.max_dmg
-        if m_max > 0:
-            m_raw = self.rng.rand(m_min, m_max, "MonsterDmg")
-        else:
-            m_raw = 0
+        # 4. Monster Agro & Autonomous Counter-Attack (Asynchronous Scheduler Event)
+        monster.target = self.player
+        if self.clock.now() >= self._monster_busy_until.get(monster.uid, 0):
+            # MonAi 30ms reaction tick
+            self._schedule_monster_action(monster, delay_ms=30)
 
-        player_ac = getattr(self.player, "ac", 10)
-        if player_ac > 0 and m_raw > 0:
-            ac_reduce = self.rng.rand(1, player_ac, "MonsterAcReduce")
-            m_dmg = max(0, m_raw - ac_reduce)
-        else:
-            m_dmg = m_raw
+        # 5. Gate player action interval: attack_interval_ms
+        self.scheduler.schedule_after(self.attack_interval_ms, self.step, name="attack_action_gate")
 
-        old_p_hp = self.player.hp
-        new_p_hp = max(0, old_p_hp - m_dmg)
-        self.player.hp = new_p_hp
-        self.total_damage_taken += m_dmg
+    def _schedule_monster_action(self, monster: Monster, delay_ms: int) -> None:
+        """Schedule autonomous action for monster after delay_ms."""
+        self._monster_busy_until[monster.uid] = self.clock.now() + delay_ms
+        self.scheduler.schedule_after(
+            delay_ms,
+            lambda m=monster: self._monster_step(m),
+            name=f"monster_step_{monster.uid}",
+        )
 
-        self._log(f"COUNTER-ATTACK: {monster.name}→Player for {m_dmg} dmg | Player HP: {new_p_hp}/{self.player.max_hp}")
+    def _execute_respawn(self, monster: Monster) -> None:
+        """
+        Execute scheduled monster respawn into the active world.
+        Parity with MonsterInstance.reSpawn() (MonsterInstance.java:527-551).
+        """
+        if not monster.is_dead:
+            return
+        new_pos = self.population.respawn_monster(monster, self._current_map_grid)
+        self.respawn_count += 1
+        self._log(f"RESPAWN: {monster.name} respawned at ({new_pos.x}, {new_pos.y}) HP: {monster.hp}/{monster.max_hp}")
 
-        if new_p_hp == 0:
-            self.player.is_dead = True
-            self.state = BotState.DEAD
-            self._log(f"PLAYER DIED: Slain by {monster.name}")
+    def _monster_step(self, monster: Monster) -> None:
+        """
+        Autonomous Monster AI step triggered via Scheduler.
+        Implements canonical 1.82 MonsterInstance behavior:
+        - Attack on modespeed(GfxMode + 1) if in attack range
+        - Approach on modespeed(GfxMode) if within chase range
+        - IMMEDIATE damage application upon attack
+        """
+        if monster.is_dead or self.player.is_dead:
+            return
+        if monster.target is None:
             return
 
-        # 5. Gate action interval: 920ms PC attack
-        self.scheduler.schedule_after(self.attack_interval_ms, self.step, name="attack_action_gate")
+        # Check distance to target
+        dx = self.player.x - monster.x
+        dy = self.player.y - monster.y
+        dist = max(abs(dx), abs(dy))
+
+        if dist <= 1:
+            # In melee range: Monster Attack!
+            m_min = monster.min_dmg
+            m_max = monster.max_dmg
+            if m_max > 0:
+                m_raw = self.rng.rand(m_min, m_max, "MonsterDmg")
+            else:
+                m_raw = 0
+
+            player_ac = getattr(self.player, "ac", 10)
+            if player_ac > 0 and m_raw > 0:
+                ac_reduce = self.rng.rand(1, player_ac, "MonsterAcReduce")
+                m_dmg = max(0, m_raw - ac_reduce)
+            else:
+                m_dmg = m_raw
+
+            old_p_hp = self.player.hp
+            new_p_hp = max(0, old_p_hp - m_dmg)
+            self.player.hp = new_p_hp
+            self.total_damage_taken += m_dmg
+
+            self._log(f"MONSTER ATTACK: {monster.name}→Player for {m_dmg} dmg | Player HP: {new_p_hp}/{self.player.max_hp}")
+
+            if new_p_hp == 0:
+                self.player.is_dead = True
+                self.state = BotState.DEAD
+                self._log(f"PLAYER DIED: Slain by {monster.name}")
+                return
+
+            # Action gate: monster.attack_speed_ms (modespeed(GfxMode + 1))
+            self._schedule_monster_action(monster, delay_ms=monster.attack_speed_ms)
+
+        elif dist <= 12:
+            # In pursuit range: Monster Move!
+            step_dx = 1 if dx > 0 else (-1 if dx < 0 else 0)
+            step_dy = 1 if dy > 0 else (-1 if dy < 0 else 0)
+
+            step_taken = False
+            for h, (hdx, hdy) in HEADING_DELTA.items():
+                if (hdx == step_dx or step_dx == 0) and (hdy == step_dy or step_dy == 0):
+                    cand_x = monster.x + hdx
+                    cand_y = monster.y + hdy
+                    if cand_x == self.player.x and cand_y == self.player.y:
+                        # Do not overlap player tile
+                        break
+                    can_step, _ = can_move(self._current_map_grid, monster.x, monster.y, h)
+                    if can_step:
+                        monster.x = cand_x
+                        monster.y = cand_y
+                        monster.heading = h
+                        self._log(f"MONSTER MOVE: {monster.name} advanced to ({monster.x}, {monster.y}) pursuing Player")
+                        step_taken = True
+                        break
+
+            # Action gate: monster.move_speed_ms (modespeed(GfxMode))
+            self._schedule_monster_action(monster, delay_ms=monster.move_speed_ms)
+        else:
+            # Target lost
+            monster.target = None
 
     def _execute_loot(self, drop: GroundDrop) -> None:
         """
@@ -393,6 +508,7 @@ class HeadlessBot:
         return {
             "reason": reason,
             "kills": self.kills,
+            "respawns": self.respawn_count,
             "final_level": self.player.level,
             "final_exp": self.player.exp,
             "final_hp": self.player.hp,
