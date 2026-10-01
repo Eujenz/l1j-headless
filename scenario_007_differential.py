@@ -153,12 +153,15 @@ def verify_conformance(
     print(f"  [PASS] MapEntered: Map 1 at ({enter_ev['x']}, {enter_ev['y']})")
 
     # -----------------------------------------------------------------
-    # LEVEL 5: AUTONOMOUS SIMULATION LIFECYCLE & OUTCOME CONFORMANCE
+    # LEVEL 5: CANONICAL SCENARIO OUTCOME & CONTRACT VALIDATION
     # -----------------------------------------------------------------
     print("\n-----------------------------------------------------------------")
-    print(">>> LEVEL 5: AUTONOMOUS SIMULATION LIFECYCLE & OUTCOME")
+    print(">>> LEVEL 5: CANONICAL SCENARIO OUTCOME & CONTRACT VALIDATION")
     print("-----------------------------------------------------------------")
-    expectation = next((r for r in oracle_records if r.get("type") == "ORACLE_SIMULATION_EXPECTATION"), {})
+    expectation = next(
+        (r for r in oracle_records if r.get("type") in ("CANONICAL_SCENARIO_EXPECTATION", "ORACLE_SIMULATION_EXPECTATION")),
+        {}
+    )
 
     assert native_meta.get("final_level") == expectation["expected_final_level"], \
         f"Final level mismatch: {native_meta.get('final_level')} vs {expectation['expected_final_level']}"
@@ -169,9 +172,9 @@ def verify_conformance(
     assert native_meta.get("total_events", 0) >= expectation["expected_min_events"], \
         f"Total events too low: {native_meta.get('total_events')} < {expectation['expected_min_events']}"
 
-    print(f"  [PASS] Final Level Conformance : Lv{native_meta['final_level']} (Oracle: Lv{expectation['expected_final_level']})")
-    print(f"  [PASS] Final EXP Conformance   : {native_meta['final_exp']} EXP (Oracle: {expectation['expected_final_exp']} EXP)")
-    print(f"  [PASS] Total Kills Conformance : {native_meta['total_kills']} kills (Oracle: {expectation['expected_total_kills']} kills)")
+    print(f"  [PASS] Final Level Conformance : Lv{native_meta['final_level']} (Contract: Lv{expectation['expected_final_level']})")
+    print(f"  [PASS] Final EXP Conformance   : {native_meta['final_exp']} EXP (Contract: {expectation['expected_final_exp']} EXP)")
+    print(f"  [PASS] Total Kills Conformance : {native_meta['total_kills']} kills (Contract: {expectation['expected_total_kills']} kills)")
     print(f"  [PASS] Total Events Volume     : {native_meta['total_events']} events (>= {expectation['expected_min_events']})")
 
     print("\n=================================================================")
@@ -182,7 +185,7 @@ def verify_conformance(
     print("  Level 2: Character Progression Parity  : PASS")
     print("  Level 3: Equipment & Domain Events     : PASS")
     print("  Level 4: Cross-Map Transition Parity   : PASS")
-    print("  Level 5: Autonomous Simulation Outcome : PASS")
+    print("  Level 5: Canonical Scenario Outcome    : PASS")
     print("=================================================================")
     print("    >>> SCENARIO 007 CONFORMANCE CERTIFICATION: PASS <<<")
     print("=================================================================")
