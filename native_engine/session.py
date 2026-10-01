@@ -473,7 +473,7 @@ class GameSession:
         Fully automatic combat loop against a single monster.
 
         LEGACY_OBSERVED combat cadence:
-        - Player Attack: player.attack_speed_ms (880ms for Male Knight sword)
+        - Player Attack: player.attack_speed_ms (920ms for Knight one-hand sword)
         - Monster Counter-Attack: monster.attack_speed_ms from sprite_frame.sql
         """
         if monster.is_dead or self.player.is_dead:

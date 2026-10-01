@@ -1,0 +1,107 @@
+# L1J 1.82 Legacy Fidelity Ledger (MVP-02)
+
+## 1. 說明與分類標準
+
+本文件對目前已進入 `l1j-headless` MVP-01 / MVP-02 運行階段之所有遊戲機制（Game Mechanics）、數值、公式與行為進行嚴格的 **Legacy Fidelity Audit**。
+
+任何機制不得以「代碼能跑通」或「經驗觀察」擅自宣稱為真實伺服器規格。所有機制必須嚴格分類為以下五種標準之一：
+
+- **`LEGACY_RULE`**: 直接對應 L1J 1.82 Legacy Server / DB 原始碼或資料表，具有完全一致之明確證據。
+- **`DERIVED_CANONICAL`**: 根據 Legacy 原始碼與資料表邏輯所歸納、推導之標準規格（如 VirtualClock 事件排程）。
+- **`BOT_POLICY`**: 屬於自主代理人（Headless Bot）之決策策略，非 L1J 伺服器本體規則，不可宣稱為 L1J 官方 AI。
+- **`CONTROLLED_SUBSTITUTION`**: 因無圖形/決定性測試需求，對 Legacy 實作所進行之受控替代（如隨機數固定中位數、地圖初始生成等）。
+- **`UNKNOWN`**: 目前尚未找到 1.82 Legacy 直接原始證據，保留待後續考古確認。
+
+---
+
+## 2. 核心機制保真度總表 (Master Fidelity Ledger)
+
+| Mechanic (機制) | Implementation (目前實作) | L1J 1.82 Evidence (原始證據) | Classification | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Player Movement Interval** | 640 ms (Virtual Clock event gate) | `sprite_frame.sql:81, 118` (action 0/4 `walk` = 640ms), `SprTable.java:60` | `LEGACY_RULE` | **CONFIRMED** |
+| **Weapon Attack Interval (Knight Sword)** | 920 ms (Virtual Clock event gate) | `sprite_frame.sql:84` (`女騎士` GFX 48 action 5 = 920ms), `SprTable.java:84`, `canonical_timing_spec.md:350` | `LEGACY_RULE` | **CONFIRMED** (MVP-02 修正) |
+| **Attack Damage Timing** | Immediate ($T = 0$) | `PcInstance.java:600-650`, `C_Attack.java:26`, `canonical_timing_spec.md:214` | `LEGACY_RULE` | **CONFIRMED** |
+| **Damage Formula (Physical)** | `CanonicalCombat.calculate_damage()` | `PcInstance.java:613`, `CalcStat.calcDmg()`, `C_Attack.java` | `DERIVED_CANONICAL` | **CONFIRMED** |
+| **Hit Formula (HitFigure)** | `CanonicalCombat.resolve_hit()` | `PcInstance.java:606`, `CalcStat.calcHit()` | `DERIVED_CANONICAL` | **CONFIRMED** |
+| **Monster Movement Timing** | `modespeed(0)` from `client/list.spr` | `MonsterTable.java:76`, `ClientFileLoad.java:42`, `modespeed[0]` (單位和 × 40ms) | `LEGACY_RULE` | **CONFIRMED** |
+| **Monster Attack Timing** | `modespeed(1)` from `client/list.spr` | `MonsterTable.java:77`, `ClientFileLoad.java:42`, `modespeed[1]` (單位和 × 40ms) | `LEGACY_RULE` | **CONFIRMED** |
+| **Monster Death / Despawn** | HP <= 0 即時判定死亡並移出 active map | `MonsterInstance.java:450`, `NpcInstance.java` (death check) | `LEGACY_RULE` | **CONFIRMED** |
+| **Monster EXP Distribution** | 漂浮之眼 +50, 人形僵屍 +37 | `db/lineage/monster.sql:57` (漂浮之眼 exp=50), `monster.sql:63` (人形僵屍 exp=37) | `LEGACY_RULE` | **CONFIRMED** |
+| **Level Progression Thresholds** | Lv1: 20 EXP, Lv2: 45 EXP, Lv3: 80 EXP | `db/lineage/exp.sql:27-29` (`bonus` 欄位: 20, 45, 80) | `LEGACY_RULE` | **CONFIRMED** |
+| **Level Up HP Growth** | 騎士升級固定 +9 MaxHP (con<=15) | `Character.java:980-998` `start_hp = 6 + rand(1..6)`。目前採用中位數 3 (6+3=9) 作為確定性測試替代 | `CONTROLLED_SUBSTITUTION` | **VALIDATED** |
+| **Drop Table Contents** | 漂浮之眼肉(166)、骷髏骨(288)、銀長劍(102)等 | `db/lineage/monster_item_drop.sql` (各怪物 monid 關聯表) | `LEGACY_RULE` | **CONFIRMED** |
+| **Drop Chance Calculation** | 機率採用萬分比 `rand(1, 10000) <= chance` | `MonsterItemDropTable.java:57` (`Util.rand(1, 10000) <= d.getChance() * Config.RATE_DROP`) | `LEGACY_RULE` | **CONFIRMED** |
+| **Drop Quantity** | `count_min` 至 `count_max` 隨機區間 | `MonsterItemDropTable.java:73` (`Util.rand(d.getCount_min(), d.getCount_max())`) | `LEGACY_RULE` | **CONFIRMED** |
+| **Ground Item Generation** | 掉落物生成於怪物座標 $(x, y)$ | `C_ItemDrop.java`, `MonsterItemDropTable.java`, `WorldInstance.java` | `LEGACY_RULE` | **CONFIRMED** |
+| **Loot (Item Pickup)** | 靠近至目標格後拾取進 Inventory | `C_ItemPickup.java:33` (`L1Object.pickup()`), `PcInstance.java` | `LEGACY_RULE` | **CONFIRMED** |
+| **Player Inventory Structure** | 具備 item_id, count 之清單式容器 | `PcInventory.java`, `ItemInstance.java` | `DERIVED_CANONICAL` | **CONFIRMED** |
+| **Target Selection Policy** | 優先攻擊近戰目標、檢查 A* 可達性、避開高等級怪物 | Bot 自主感知與啟發式決策樹 | `BOT_POLICY` | **AGENT_SPECIFIC** |
+| **Roaming / Patrol Policy** | 無目標時沿地圖幾何漫步搜尋敵人 | Bot 自主尋路與巡邏漫遊狀態機 | `BOT_POLICY` | **AGENT_SPECIFIC** |
+| **HP TIC Regeneration** | 每 10 秒回血 +5 HP | `HpMpTimer.java:62-63` (`cha.isHpTic()`, `cha.hpTic()`) | `CONTROLLED_SUBSTITUTION` | **VALIDATED** |
+
+---
+
+## 3. 關鍵數值之原始證據回溯 (Detailed Trace Back)
+
+### 3.1 怪物 EXP (+50 EXP, +37 EXP)
+- **證據來源**: `db/lineage/monster.sql`
+- **實測驗證**:
+  - `漂浮之眼` (ID 1, GFX 29): 第 12 欄位 `exp = 50`。
+  - `人形僵屍` (ID 7, GFX 52): 第 12 欄位 `exp = 37`。
+  - `骷髏` (ID 2, GFX 30): 第 12 欄位 `exp = 70`。
+- **結論**: 目前執行日誌出現的 `+50 EXP` 與 `+37 EXP` 均為 **100% LEGACY_RULE**，非自創數值。
+
+### 3.2 角色升級門檻 (EXP Table)
+- **證據來源**: `db/lineage/exp.sql`
+- **實測驗證**:
+  - `INSERT INTO exp VALUES ('1', '1', '20', '20');` (達 20 EXP 升 Lv2)
+  - `INSERT INTO exp VALUES ('2', '2', '25', '45');` (達 45 累積 EXP 升 Lv3)
+  - `INSERT INTO exp VALUES ('3', '3', '35', '80');` (達 80 累積 EXP 升 Lv4)
+- **結論**: 目前等級晉升條件完全遵循 1.82 Legacy 資料庫規格。
+
+### 3.3 升級生命值成長 (+9 MaxHP)
+- **證據來源**: `src/net/world/object/Character.java:979-999` (`StatusUP()`)
+- **原始碼實作**:
+  ```java
+  case 1: // Knight
+    temp = Util.rand(1, 64);
+    if (con <= 15) {
+      start_hp = 6;
+    } else {
+      start_hp = con - 9;
+    }
+    if (temp <= 7) { start_hp += 1; }
+    else if (temp <= 22) { start_hp += 2; }
+    else if (temp <= 42) { start_hp += 3; }  // 最常出現區間 (31.25%)
+    else if (temp <= 57) { start_hp += 4; }
+    else if (temp <= 63) { start_hp += 5; }
+    else { start_hp += 6; }
+  ```
+- **目前實作**:
+  在 `native_engine/progression.py` 中，為確保單元測試之確定性（Determinism），使用中位數 `start_hp = 6 + 3 = 9`。
+- **分類定位**: 數值結構來自 `Character.java`，採用確定性中位數判定為 `CONTROLLED_SUBSTITUTION`。
+
+### 3.4 掉落機率與數量 (Drop Chance & Count)
+- **證據來源**: `src/net/database/MonsterItemDropTable.java:57-75` 與 `db/lineage/monster_item_drop.sql`
+- **判定邏輯**:
+  ```java
+  if (Util.rand(1, 10000) <= d.getChance() * Config.RATE_DROP) {
+      ItemInstance item = ItemsTable.getInstance().newItem(d.getItemid(), false, true);
+      item.setCount(Util.rand(d.getCount_min(), d.getCount_max()));
+      mon.getInventory().add(item);
+  }
+  ```
+- **結論**: 機率分母為 10,000，數量取區間隨機，完全依循原始伺服器規則。
+
+---
+
+## 4. 殘餘受控替代與未確認清單 (Remaining Substitutions & Unknowns)
+
+### 4.1 殘餘受控替代 (CONTROLLED_SUBSTITUTION)
+1. **升級 HP 隨機分佈**: 目前採用固定中位數（+9），未來若接入完整 Seeded RNG 可還原 1..64 權重隨機分佈。
+2. **怪物的在地圖初始分佈**: 伺服器啟動時由 `MonsterSpawnTable` 隨機擲骰 50 次，目前由 `initialize_s007_session` 依 Seed 決定。
+3. **自然回血 (HP TIC)**: 目前設定每 10 秒回 5 HP，Legacy 原始依體重（<= 14）與角色姿態（站立 4s / 步行 16s）動態變動。
+
+### 4.2 殘餘未確認清單 (UNKNOWN)
+1. **怪物被擊退 (Push/Stun) 動畫時長**: 在 1.82 中是否有固定的 Action ID 與封包延遲，待後續封包層實作時確認。
+2. **多怪物碰撞重疊 (Tile Collision)**: 怪物之間在同一格能否重疊（Lineage 1.82 原版允許怪物短暫重疊於同格，或限制不可穿過），目前以 A* 碰撞為準。

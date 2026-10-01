@@ -66,11 +66,11 @@ class Actor:
     ac: int = 10
     mp: int = 10
     max_mp: int = 10
-    # LEGACY_OBSERVED: GFX 61 (Male Knight), mode 4 (Sword/Dagger), move=640ms, attack=880ms
+    # LEGACY_OBSERVED: L1J 1.82 Knight one-hand sword canonical interval = 920ms (GFX 48 action 5, SprTable:84, canonical_timing_spec.md)
     gfx: int = 61
     gfx_mode: int = 4
     move_speed_ms: int = 640
-    attack_speed_ms: int = 880
+    attack_speed_ms: int = 920
     next_move_at: int = 0
     next_attack_at: int = 0
 

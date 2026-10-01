@@ -67,13 +67,19 @@ class HeadlessBot:
         self.items_looted: List[Item] = []
         self.trace_log: List[str] = []
 
-        # Action Intervals (Canonical from canonical_timing_spec.md)
+        # Action Intervals (Canonical from canonical_timing_spec.md: Knight Sword = 920ms)
         self.move_interval_ms = getattr(player, "move_speed_ms", 640)
-        self.attack_interval_ms = getattr(player, "attack_speed_ms", 880)
+        self.attack_interval_ms = getattr(player, "attack_speed_ms", 920)
 
         # Roaming wander direction counter
         self._roam_heading = 0
         self._roam_steps_remaining = 0
+        self._last_hp_tic = 0
+
+        # Starter supplies: ensure player has basic Red Potions (item 104) for persistent hunt
+        if not any(item.item_id == 104 for item in self.player.inventory.items):
+            starter_pot = Item(item_id=104, name="Red Potion", count=30)
+            self.player.inventory.add(starter_pot)
 
         self._log(f"PLAYER SPAWN: {player.name} (Lv{player.level} HP:{player.hp}/{player.max_hp}) at Map {player.map_id} ({player.x}, {player.y}) with {player.equipped_weapon.name if player.equipped_weapon else 'Bare Hands'}")
 
@@ -98,6 +104,13 @@ class HeadlessBot:
             return
 
         self._sync_map_grid()
+
+        # Natural HP regeneration TIC (Legacy HpMpTimer: 10s TIC)
+        if self.clock.now() - self._last_hp_tic >= 10000:
+            self._last_hp_tic = self.clock.now()
+            if self.player.hp < self.player.max_hp and not self.player.is_dead:
+                regen = 5
+                self.player.hp = min(self.player.max_hp, self.player.hp + regen)
 
         # 1. Perception
         snapshot = self.perception_sys.perceive(
@@ -201,7 +214,7 @@ class HeadlessBot:
         """
         Execute PC physical attack against monster.
         Canonical Damage Timing: IMMEDIATE (T = 0).
-        Canonical Action Interval Gate: player.attack_speed_ms (880ms).
+        Canonical Action Interval Gate: player.attack_speed_ms (920ms).
         """
         self.active_target = monster
         weapon = self.player.equipped_weapon
@@ -284,7 +297,7 @@ class HeadlessBot:
             self._log(f"PLAYER DIED: Slain by {monster.name}")
             return
 
-        # 5. Gate action interval: 880ms PC attack
+        # 5. Gate action interval: 920ms PC attack
         self.scheduler.schedule_after(self.attack_interval_ms, self.step, name="attack_action_gate")
 
     def _execute_loot(self, drop: GroundDrop) -> None:
@@ -338,12 +351,12 @@ class HeadlessBot:
         self._log(f"POTION: Drank {potion.name} (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
         self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
-    def run_session(self, max_kills: int = 5, max_virtual_ms: int = 600000) -> Dict[str, Any]:
+    def run_session(self, max_kills: Optional[int] = 5, max_virtual_ms: int = 600000) -> Dict[str, Any]:
         """
         Executes persistent autonomous hunting loop in Virtual Time.
 
         Stops only when:
-        1. max_kills is reached, OR
+        1. max_kills is reached (if max_kills is not None and > 0), OR
         2. max_virtual_ms is reached, OR
         3. player dies.
         """
@@ -351,7 +364,7 @@ class HeadlessBot:
         self.step()
 
         while (
-            self.kills < max_kills
+            (max_kills is None or max_kills <= 0 or self.kills < max_kills)
             and self.clock.now() < max_virtual_ms
             and not self.player.is_dead
         ):
@@ -366,7 +379,14 @@ class HeadlessBot:
             self.scheduler.run_until(target_time)
 
         duration = self.clock.now()
-        reason = "KILL_LIMIT_REACHED" if self.kills >= max_kills else ("TIME_LIMIT_REACHED" if duration >= max_virtual_ms else "PLAYER_DEAD")
+        if self.player.is_dead:
+            reason = "PLAYER_DEAD"
+        elif max_kills is not None and max_kills > 0 and self.kills >= max_kills:
+            reason = "KILL_LIMIT_REACHED"
+        elif duration >= max_virtual_ms:
+            reason = "SIMULATION_TIME_REACHED"
+        else:
+            reason = "SESSION_TERMINATED"
 
         self._log(f"SESSION END: Reason={reason} | Kills={self.kills} | Level={self.player.level} | EXP={self.player.exp} | VirtualTime={duration}ms")
 

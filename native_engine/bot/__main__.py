@@ -17,19 +17,26 @@ from ..temporal import VirtualClock
 
 def main():
     parser = argparse.ArgumentParser(description="L1J 1.82 Headless Auto-Hunt Autonomous Agent")
-    parser.add_argument("--kills", type=int, default=3, help="Kill limit for hunting session")
+    parser.add_argument("--kills", type=int, default=None, help="Kill limit for hunting session (optional)")
+    parser.add_argument("--sim-ms", type=int, default=None, help="Simulation duration in virtual ms (e.g. 600000 for 10 min)")
+    parser.add_argument("--max-time-ms", type=int, default=None, help="Alias for --sim-ms")
     parser.add_argument("--map-id", type=int, default=1, help="Starting map ID (0=TI Surface, 1=TI Dungeon 1F)")
-    parser.add_argument("--max-time-ms", type=int, default=600000, help="Max virtual time in milliseconds (default 10 min)")
     parser.add_argument("--seed", type=int, default=777777, help="RNG seed for deterministic world simulation")
     parser.add_argument("--contract", type=str, default="scenario_007_contract.json", help="Path to scenario contract")
     args = parser.parse_args()
+
+    # Determine simulation time limit
+    sim_ms = args.sim_ms or args.max_time_ms or 600000
+    kills = args.kills
+    if kills is None and args.sim_ms is None and args.max_time_ms is None:
+        kills = 3  # Default quick demo if neither kills nor sim-ms specified
 
     print("=================================================================")
     print("   L1J 1.82 HEADLESS AUTO-HUNT VERTICAL SLICE (AUTONOMOUS BOT)   ")
     print("=================================================================")
     print(f" Target Map     : Map {args.map_id} ({'TI Dungeon 1F' if args.map_id == 1 else 'TI Surface'})")
-    print(f" Kill Target    : {args.kills} kills")
-    print(f" Max Virtual Time: {args.max_time_ms} ms ({args.max_time_ms / 60000:.1f} simulated minutes)")
+    print(f" Kill Target    : {f'{kills} kills' if kills else 'Indefinite (Persistent until time limit)'}")
+    print(f" Max Virtual Time: {sim_ms} ms ({sim_ms / 60000:.1f} simulated minutes)")
     print(f" Seed           : {args.seed}")
     print("-----------------------------------------------------------------")
 
@@ -54,7 +61,7 @@ def main():
     )
 
     print("\n[STARTING AUTONOMOUS HUNTING SESSION IN VIRTUAL TIME]")
-    result = bot.run_session(max_kills=args.kills, max_virtual_ms=args.max_time_ms)
+    result = bot.run_session(max_kills=kills, max_virtual_ms=sim_ms)
 
     print("\n=================================================================")
     print("                    BOT SESSION COMPLETED                        ")

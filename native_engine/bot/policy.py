@@ -73,7 +73,9 @@ class BotPolicy:
         3. Hostile / Agro monsters first (agro > 0)
         4. Closest Chebyshev distance
         """
-        candidates = [m for m in snapshot.nearby_monsters if not m.is_dead and m.hp > 0]
+        # Filter: only alive monsters within realistic level range (level <= player.level + 6)
+        # Avoids suicide attacks on mini-bosses (e.g. Elder Lv30) by novice players
+        candidates = [m for m in snapshot.nearby_monsters if not m.is_dead and m.hp > 0 and (m.level <= snapshot.level + 6)]
         if not candidates:
             return None
 

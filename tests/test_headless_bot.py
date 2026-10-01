@@ -107,6 +107,26 @@ class TestHeadlessBot(unittest.TestCase):
         self.assertIn("MONSTER DIED", log_text)
         self.assertIn("LEVEL UP", log_text)
 
+    def test_knight_sword_canonical_interval(self):
+        """
+        Regression Test: Knight one-hand sword attack interval must strictly match
+        the canonical benchmark interval of 920ms (SprTable:84, sprite_frame.sql GFX 48 action 5).
+        """
+        self.assertEqual(self.bot.attack_interval_ms, 920)
+        self.assertEqual(self.session.player.attack_speed_ms, 920)
+
+    def test_persistent_simulation_time_limit(self):
+        """
+        Validates persistent auto-hunt when max_kills is None (time-bound session).
+        Ensures bot runs persistently for requested virtual time without terminating early.
+        """
+        sim_ms = 60000  # 1 virtual minute
+        result = self.bot.run_session(max_kills=None, max_virtual_ms=sim_ms)
+        self.assertEqual(result["reason"], "SIMULATION_TIME_REACHED")
+        self.assertEqual(result["virtual_time_ms"], sim_ms)
+        self.assertGreater(result["final_hp"], 0)
+        self.assertFalse(self.session.player.is_dead)
+
 
 if __name__ == "__main__":
     unittest.main()

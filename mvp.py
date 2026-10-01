@@ -210,7 +210,7 @@ def initialize_s007_session(
         gfx=p_data.get("gfx", 61),
         gfx_mode=p_data.get("gfx_mode", 4),
         move_speed_ms=p_data.get("move_speed_ms", 640),
-        attack_speed_ms=p_data.get("attack_speed_ms", 880),
+        attack_speed_ms=p_data.get("attack_speed_ms", 920),
     )
     setattr(player, 'ac', p_data.get("ac", 10))  # Store AC for monster counter-attack
 
