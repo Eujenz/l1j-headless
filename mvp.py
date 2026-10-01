@@ -28,6 +28,7 @@ from native_engine.population import PopulationManager
 from native_engine.progression import ProgressionManager
 from native_engine.equipment import EquipmentManager, build_weapon_from_contract
 from native_engine.rng import NativeRng
+from native_engine.clock import SimulationClock, VirtualClock, RealTimeClock
 
 
 def resolve_path(path: str) -> str:
@@ -147,6 +148,7 @@ def initialize_s007_session(
     contract_path: str = "scenario_007_contract.json",
     legacy_root_arg: Optional[str] = None,
     seed_override: Optional[int] = None,
+    clock: Optional[SimulationClock] = None,
 ) -> GameSession:
     resolved_contract = resolve_path(contract_path)
     with open(resolved_contract, "r", encoding="utf-8") as f:
@@ -205,6 +207,10 @@ def initialize_s007_session(
         inventory=Inventory(),
         equipped_weapon=equipped_weapon,
         exp=0, lawful=0, is_dead=False,
+        gfx=p_data.get("gfx", 61),
+        gfx_mode=p_data.get("gfx_mode", 4),
+        move_speed_ms=p_data.get("move_speed_ms", 640),
+        attack_speed_ms=p_data.get("attack_speed_ms", 880),
     )
     setattr(player, 'ac', p_data.get("ac", 10))  # Store AC for monster counter-attack
 
@@ -219,7 +225,7 @@ def initialize_s007_session(
         world=world, player=player,
         transition_engine=trans_engine, transition_provider=provider,
         population=population, progression=progression, equipment_mgr=equip_mgr,
-        destinations=destinations, seed=seed,
+        destinations=destinations, seed=seed, clock=clock,
     )
 
 
@@ -447,6 +453,8 @@ def main():
     parser.add_argument("--seed", type=int, default=None, help="Deterministic PRNG seed override (e.g. 777777)")
     parser.add_argument("--contract", default=None, help="Override contract path")
     parser.add_argument("--legacy-root", default=None, help="Path to Eujenz/182c")
+    parser.add_argument("--speed", type=float, default=1.0, help="Simulation speed multiplier (1.0 = true Legacy cadence, 2.0 = 2x, 0 = instant)")
+    parser.add_argument("--instant", action="store_true", help="Force instant execution (VirtualClock)")
     args = parser.parse_args()
 
     if args.demo and not args.s007:
@@ -457,7 +465,12 @@ def main():
     elif args.s007 or (not args.demo):
         # S007 authentic mode (default for interactive, or --demo --s007)
         contract_path = args.contract or "scenario_007_contract.json"
-        session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed)
+        if args.demo or args.instant or args.speed <= 0:
+            clock = VirtualClock()
+        else:
+            clock = RealTimeClock(time_scale=args.speed)
+
+        session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed, clock=clock)
         if args.demo:
             run_s007_demo(session, kill_limit=args.kills)
         else:

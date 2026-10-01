@@ -59,6 +59,9 @@ class MonsterDefinition:
     agro: int
     undead: int
     size: str
+    gfx: int = 0
+    move_speed_ms: int = 800
+    attack_speed_ms: int = 1200
 
 
 class PopulationManager:
@@ -93,6 +96,9 @@ class PopulationManager:
                 agro=v.get("agro", 0),
                 undead=v.get("undead", 0),
                 size=v.get("size", "small"),
+                gfx=v.get("gfx", 0),
+                move_speed_ms=v.get("move_speed_ms", 800),
+                attack_speed_ms=v.get("attack_speed_ms", 1200),
             )
 
         # Load spawn definitions
@@ -196,6 +202,9 @@ class PopulationManager:
                     agro=mdef.agro,
                     undead=mdef.undead,
                     spawn_uid=sd.spawn_uid,
+                    gfx=mdef.gfx,
+                    move_speed_ms=mdef.move_speed_ms,
+                    attack_speed_ms=mdef.attack_speed_ms,
                 )
                 if sd.map_id not in self._map_monsters:
                     self._map_monsters[sd.map_id] = []

@@ -63,6 +63,14 @@ class Actor:
     exp: int = 0
     lawful: int = 0
     is_dead: bool = False
+    ac: int = 10
+    # LEGACY_OBSERVED: GFX 61 (Male Knight), mode 4 (Sword/Dagger), move=640ms, attack=880ms
+    gfx: int = 61
+    gfx_mode: int = 4
+    move_speed_ms: int = 640
+    attack_speed_ms: int = 880
+    next_move_at: int = 0
+    next_attack_at: int = 0
 
     @property
     def x(self) -> int:
@@ -111,6 +119,12 @@ class Monster:
     undead: int = 0
     # spawn_uid: links back to spawn_definitions record for provenance
     spawn_uid: int = 0
+    # LEGACY_OBSERVED: timing from sprite_frame.sql
+    gfx: int = 0
+    move_speed_ms: int = 800
+    attack_speed_ms: int = 1200
+    next_move_at: int = 0
+    next_attack_at: int = 0
 
 @dataclass
 class CanonicalMapDefinition:

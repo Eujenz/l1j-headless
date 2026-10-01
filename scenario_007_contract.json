@@ -56,7 +56,11 @@
         "two_hand": 0
       }
     ],
-    "equipped_weapon_id": 1
+    "equipped_weapon_id": 1,
+    "gfx": 61,
+    "gfx_mode": 4,
+    "move_speed_ms": 640,
+    "attack_speed_ms": 880
   },
   "destinations": [
     {
@@ -86,7 +90,11 @@
       "exp": 50,
       "agro": 0,
       "undead": 0,
-      "size": "small"
+      "size": "small",
+      "gfx": 29,
+      "move_speed_ms": 960,
+      "attack_speed_ms": 1720,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "2": {
       "id": 2,
@@ -99,7 +107,11 @@
       "exp": 101,
       "agro": 0,
       "undead": 5,
-      "size": "small"
+      "size": "small",
+      "gfx": 30,
+      "move_speed_ms": 640,
+      "attack_speed_ms": 920,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "3": {
       "id": 3,
@@ -112,7 +124,11 @@
       "exp": 37,
       "agro": 1,
       "undead": 0,
-      "size": "small"
+      "size": "small",
+      "gfx": 31,
+      "move_speed_ms": 800,
+      "attack_speed_ms": 1200,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "4": {
       "id": 4,
@@ -125,7 +141,11 @@
       "exp": 82,
       "agro": 0,
       "undead": 5,
-      "size": "small"
+      "size": "small",
+      "gfx": 1110,
+      "move_speed_ms": 640,
+      "attack_speed_ms": 840,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "6": {
       "id": 6,
@@ -138,7 +158,11 @@
       "exp": 170,
       "agro": 1,
       "undead": 0,
-      "size": "large"
+      "size": "large",
+      "gfx": 49,
+      "move_speed_ms": 1280,
+      "attack_speed_ms": 1920,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "7": {
       "id": 7,
@@ -151,7 +175,11 @@
       "exp": 37,
       "agro": 0,
       "undead": 5,
-      "size": "small"
+      "size": "small",
+      "gfx": 52,
+      "move_speed_ms": 1640,
+      "attack_speed_ms": 1040,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "8": {
       "id": 8,
@@ -164,7 +192,11 @@
       "exp": 26,
       "agro": 0,
       "undead": 0,
-      "size": "small"
+      "size": "small",
+      "gfx": 54,
+      "move_speed_ms": 560,
+      "attack_speed_ms": 1480,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "9": {
       "id": 9,
@@ -177,7 +209,11 @@
       "exp": 5,
       "agro": 0,
       "undead": 0,
-      "size": "small"
+      "size": "small",
+      "gfx": 56,
+      "move_speed_ms": 800,
+      "attack_speed_ms": 1320,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "12": {
       "id": 12,
@@ -190,7 +226,11 @@
       "exp": 65,
       "agro": 1,
       "undead": 0,
-      "size": "small"
+      "size": "small",
+      "gfx": 94,
+      "move_speed_ms": 800,
+      "attack_speed_ms": 1200,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "55": {
       "id": 55,
@@ -203,7 +243,11 @@
       "exp": 5,
       "agro": 0,
       "undead": 0,
-      "size": "small"
+      "size": "small",
+      "gfx": 1022,
+      "move_speed_ms": 760,
+      "attack_speed_ms": 920,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "13": {
       "id": 13,
@@ -219,7 +263,11 @@
       "size": "small",
       "source_repository": "Eujenz/182c",
       "source_table": "monster",
-      "provenance": "LEGACY_OBSERVED"
+      "provenance": "LEGACY_OBSERVED",
+      "gfx": 57,
+      "move_speed_ms": 800,
+      "attack_speed_ms": 1200,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "18": {
       "id": 18,
@@ -235,7 +283,11 @@
       "size": "small",
       "source_repository": "Eujenz/182c",
       "source_table": "monster",
-      "provenance": "LEGACY_OBSERVED"
+      "provenance": "LEGACY_OBSERVED",
+      "gfx": 144,
+      "move_speed_ms": 1280,
+      "attack_speed_ms": 720,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     },
     "5": {
       "id": 5,
@@ -251,7 +303,11 @@
       "size": "small",
       "source_repository": "Eujenz/182c",
       "source_table": "monster",
-      "provenance": "LEGACY_OBSERVED"
+      "provenance": "LEGACY_OBSERVED",
+      "gfx": 32,
+      "move_speed_ms": 960,
+      "attack_speed_ms": 1800,
+      "timing_source": "LEGACY_ARCHAEOLOGY_SPRITE_FRAME_SQL"
     }
   },
   "exp_table": {

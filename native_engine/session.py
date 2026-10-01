@@ -33,6 +33,9 @@ from .events import (
     EncounterTriggered, WeaponEquipped, WeaponUnequipped,
 )
 from .model import Actor, Monster, Position, Inventory, Weapon
+from .clock import SimulationClock, VirtualClock
+from .navigation import AStarPlanner
+from .movement import MovementEngine
 from .population import PopulationManager
 from .progression import ProgressionManager
 from .rng import NativeRng
@@ -115,6 +118,7 @@ class GameSession:
         equipment_mgr: EquipmentManager,
         destinations: Dict[str, Destination],
         seed: int = 777777,
+        clock: Optional[SimulationClock] = None,
         # S006 legacy compat
         areas: Optional[Dict[str, HuntingArea]] = None,
         monsters: Optional[Dict[str, MonsterTemplate]] = None,
@@ -128,6 +132,7 @@ class GameSession:
         self.equipment_mgr = equipment_mgr
         self.destinations = destinations
         self.rng = NativeRng(seed)
+        self.clock = clock or VirtualClock()
 
         # S006 compat
         self.areas = areas or {}
@@ -300,17 +305,116 @@ class GameSession:
         return evts
 
     # ------------------------------------------------------------------
-    # Autonomous Hunt Loop
+    # Autonomous Hunt & Real-Time Simulation Loop (S007.2)
     # ------------------------------------------------------------------
+
+    def approach_target(self, target: Monster, log_callback=None) -> Tuple[bool, List[DomainEvent]]:
+        """
+        Approaches target step-by-step until within melee attack range (Chebyshev distance <= 1).
+        Uses A* pathfinding on the current map grid.
+        Advances simulation clock by player.move_speed_ms per step.
+        """
+        events: List[DomainEvent] = []
+        grid = self.world.get_map(self.player.map_id)
+        if not grid:
+            return False, events
+
+        move_engine = MovementEngine(grid)
+        dist = max(abs(self.player.x - target.pos.x), abs(self.player.y - target.pos.y))
+        if dist <= 1:
+            return True, events
+
+        if log_callback:
+            log_callback("approach", f"[接近目標] 發現 {target.name} ({target.pos.x}, {target.pos.y})，距離 {dist} 格，開始前進...")
+
+        headings = AStarPlanner.find_path(grid, self.player.x, self.player.y, target.pos.x, target.pos.y)
+        if not headings:
+            return False, events
+
+        for h in headings:
+            cur_dist = max(abs(self.player.x - target.pos.x), abs(self.player.y - target.pos.y))
+            if cur_dist <= 1:
+                break
+            if self.player.is_dead:
+                return False, events
+
+            self.tick += 10
+            self.clock.advance_by(self.player.move_speed_ms)
+            step_evs = move_engine.execute_cmd_move(self.player, h, tick=self.tick)
+            events.extend(step_evs)
+
+            if log_callback:
+                rem_dist = max(abs(self.player.x - target.pos.x), abs(self.player.y - target.pos.y))
+                log_callback("step", f"  邁步走向目標: ({self.player.x}, {self.player.y}) [剩餘 {rem_dist} 格]")
+
+            if any(ev.__class__.__name__ == 'MoveBlocked' for ev in step_evs):
+                break
+
+        final_dist = max(abs(self.player.x - target.pos.x), abs(self.player.y - target.pos.y))
+        return final_dist <= 1, events
+
+    def roam_search(self, radius: int = 14, max_steps: int = 15, log_callback=None) -> Tuple[Optional[Monster], List[DomainEvent]]:
+        """
+        Roams the map in search of monsters when none are in immediate sight (14 tiles).
+        Paces movement with clock.advance_by(player.move_speed_ms).
+        Re-scans for monsters after each step. Returns (target, events) if found.
+        """
+        events: List[DomainEvent] = []
+        grid = self.world.get_map(self.player.map_id)
+        if not grid:
+            return None, events
+
+        move_engine = MovementEngine(grid)
+        if log_callback:
+            log_callback("roam", f"[巡邏漫遊] 當前視野內無怪物，展開周邊巡邏漫遊 (最長 {max_steps} 步)...")
+
+        for step_idx in range(max_steps):
+            if self.player.is_dead:
+                return None, events
+
+            # Check if monster entered sight
+            target = EncounterSystem.find_hunt_target(self.player, self.population, radius=radius)
+            if target is not None:
+                if log_callback:
+                    log_callback("roam", f"[發現獵物] 巡邏時發現 {target.name} ({target.pos.x}, {target.pos.y})！")
+                return target, events
+
+            # Pick a passable heading
+            cand_headings = list(range(8))
+            chosen_h = None
+            for h in cand_headings:
+                dest_x, dest_y = MovementEngine._apply_heading(self.player.x, self.player.y, h)
+                if grid.is_in_bounds(dest_x, dest_y) and grid.is_passable(dest_x, dest_y):
+                    chosen_h = h
+                    break
+
+            if chosen_h is None:
+                break
+
+            self.tick += 10
+            self.clock.advance_by(self.player.move_speed_ms)
+            step_evs = move_engine.execute_cmd_move(self.player, chosen_h, tick=self.tick)
+            events.extend(step_evs)
+
+            target = EncounterSystem.find_hunt_target(self.player, self.population, radius=radius)
+            if target is not None:
+                if log_callback:
+                    log_callback("roam", f"[發現獵物] 巡邏時發現 {target.name} ({target.pos.x}, {target.pos.y})！")
+                return target, events
+
+        return None, events
 
     def hunt(
         self, kill_limit: int = 5, log_callback=None
     ):
         """
-        Autonomous hunting loop (S007) / Legacy single encounter (S006 compat).
+        Autonomous hunting loop (S007.2 Authentic World Runtime).
+        Features:
+          - Target acquisition within 14-tile sight
+          - Autonomous Approaching (A* step-by-step advance to melee range)
+          - Autonomous Roaming when no targets in sight
+          - Cadenced combat matching Legacy action cadence
         """
-        # S006 backward compatibility dispatch:
-        # In S006 mode, destinations is empty, areas/monsters are populated, and current_area is set.
         if self.current_area is not None and self.monsters and not self.destinations:
             return self.s006_hunt()
 
@@ -326,13 +430,27 @@ class GameSession:
                 self.state = "DEAD"
                 return False, "PLAYER_DEAD", all_events
 
-            # Find next target
+            # 1. Target Acquisition (Legacy sight radius = 14)
             target = EncounterSystem.find_hunt_target(
-                self.player, self.population, radius=20
+                self.player, self.population, radius=14
             )
-            if target is None:
-                break
 
+            # 2. Roaming if no targets in sight
+            if target is None:
+                target, roam_evts = self.roam_search(radius=14, max_steps=15, log_callback=log_callback)
+                all_events.extend(roam_evts)
+                self.events_history.extend(roam_evts)
+                if target is None:
+                    break
+
+            # 3. Approaching Target
+            reached_melee, app_evts = self.approach_target(target, log_callback=log_callback)
+            all_events.extend(app_evts)
+            self.events_history.extend(app_evts)
+            if not reached_melee:
+                continue
+
+            # 4. Cadenced Combat
             evts = self._run_auto_combat(target, log_callback=log_callback)
             all_events.extend(evts)
 
@@ -354,14 +472,9 @@ class GameSession:
         """
         Fully automatic combat loop against a single monster.
 
-        LEGACY_OBSERVED combat:
-        - Player → Monster: CanonicalCombat.resolve_hit + calculate_damage (S001 certified)
-        - Monster → Player: Legacy Character.java L1491-1499:
-              dmg = rand(min_dmg, max_dmg) - rand(1, total_ac)
-              No HitFigure for monster attacks (confirmed via archaeology)
-
-        Continues until monster dies or player dies.
-        Returns all domain events for this combat.
+        LEGACY_OBSERVED combat cadence:
+        - Player Attack: player.attack_speed_ms (880ms for Male Knight sword)
+        - Monster Counter-Attack: monster.attack_speed_ms from sprite_frame.sql
         """
         if monster.is_dead or self.player.is_dead:
             return []
@@ -391,6 +504,7 @@ class GameSession:
 
             self.tick += 30
             cur_tick = self.tick
+            self.clock.advance_by(self.player.attack_speed_ms)
 
             # --- Player attacks Monster ---
             events.append(AttackStarted(tick=cur_tick, attacker_id=self.player.id, target_id=monster.uid))
@@ -399,7 +513,6 @@ class GameSession:
             if weapon:
                 is_hit = CanonicalCombat.resolve_hit(self.player, monster, weapon, self.rng)
             else:
-                # Bare-hand: always hit, minimal damage (CONTROLLED_SUBSTITUTION)
                 is_hit = True
 
             events.append(HitResolved(tick=cur_tick, attacker_id=self.player.id, target_id=monster.uid, is_hit=is_hit))
@@ -466,6 +579,7 @@ class GameSession:
             # dmg = rand(min_dmg, max_dmg) - rand(1, total_ac); no HitFigure
             self.tick += 30
             cur_tick = self.tick
+            self.clock.advance_by(monster.attack_speed_ms)
 
             m_min = monster.min_dmg
             m_max = monster.max_dmg
