@@ -381,7 +381,11 @@ def run_s007_interactive(session: GameSession):
         print("[M] 移動/旅行  [H] 自動狩獵  [S] 狀態  [E] 裝備  [Q] 離開")
         print("----------------------------------------")
 
-        cmd = input("指令 > ").strip().upper()
+        try:
+            cmd = input("指令 > ").strip().upper()
+        except (EOFError, KeyboardInterrupt):
+            print("\n感謝遊玩 L1J Headless，再見!")
+            break
 
         if cmd == "Q":
             print("\n感謝遊玩 L1J Headless，再見!")
