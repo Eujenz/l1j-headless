@@ -103,6 +103,14 @@ class Monster:
     heading: int
     inventory: Inventory
     is_dead: bool = False
+    # LEGACY_OBSERVED: from monster.sql (min_dmg/max_dmg used in Character.java counter-attack)
+    min_dmg: int = 0
+    max_dmg: int = 0
+    # LEGACY_OBSERVED: agro=1 means monster actively seeks players; undead>0 means undead type
+    agro: int = 0
+    undead: int = 0
+    # spawn_uid: links back to spawn_definitions record for provenance
+    spawn_uid: int = 0
 
 @dataclass
 class CanonicalMapDefinition:
