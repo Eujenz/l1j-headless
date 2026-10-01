@@ -25,7 +25,7 @@
       "layer": "client",
       "version": "3.80",
       "target_version": "1.83",
-      "classification": "LEGACY_CLIENT_OBSERVED_3_80",
+      "classification": "LEGACY_CLIENT_OBSERVED",
       "applicability": "CROSS_VERSION_AUXILIARY",
       "authority": "client_asset_evidence",
       "runtime_dependency": false,

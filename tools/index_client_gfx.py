@@ -2,11 +2,12 @@
 tools/index_client_gfx.py - One-time SQLite Indexer for TW13081901.txt
 
 Classification:
-  LEGACY_CLIENT_OBSERVED_3_80 (CROSS_VERSION_AUXILIARY)
+  LEGACY_CLIENT_OBSERVED (CROSS_VERSION_AUXILIARY)
 
 Parses TW13081901.txt line-by-line and builds a high-performance SQLite index
 at legacy/client/3.80/TW13081901.sqlite.
 Tracks exact line ranges and byte offsets for byte-level provenance.
+Supports multi-framerate timing segments (e.g. GFX 18310).
 """
 import argparse
 import hashlib
@@ -20,7 +21,7 @@ import time
 SOURCE_ID = "legacy-client-tw13081901"
 VERSION = "3.80"
 LAYER = "client"
-CLASSIFICATION = "LEGACY_CLIENT_OBSERVED_3_80"
+CLASSIFICATION = "LEGACY_CLIENT_OBSERVED"
 EXPECTED_SHA256 = "ddcbd759d4124877768990db505a8b1f7b7cbba23e7e78fe7e3fafd4bda356fe"
 
 HEADER_RE = re.compile(r"^#(\d+)\s+([^=\s]+)(?:=(\S+))?(?:\s+(.*))?$")
@@ -55,9 +56,22 @@ def create_schema(conn: sqlite3.Connection):
     );
     """)
     cur.execute("""
+    CREATE TABLE IF NOT EXISTS gfx_timing_segment (
+        segment_id INTEGER PRIMARY KEY,
+        gfx_id INTEGER,
+        segment_index INTEGER,
+        framerate INTEGER,
+        start_line INTEGER,
+        end_line INTEGER,
+        action_count INTEGER,
+        FOREIGN KEY(gfx_id) REFERENCES gfx(gfx_id)
+    );
+    """)
+    cur.execute("""
     CREATE TABLE IF NOT EXISTS gfx_animation (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         gfx_id INTEGER,
+        segment_id INTEGER,
         action_id INTEGER,
         action_name TEXT,
         weapon TEXT,
@@ -66,7 +80,8 @@ def create_schema(conn: sqlite3.Connection):
         raw_sequence TEXT,
         start_line INTEGER,
         end_line INTEGER,
-        FOREIGN KEY(gfx_id) REFERENCES gfx(gfx_id)
+        FOREIGN KEY(gfx_id) REFERENCES gfx(gfx_id),
+        FOREIGN KEY(segment_id) REFERENCES gfx_timing_segment(segment_id)
     );
     """)
     cur.execute("""
@@ -78,12 +93,15 @@ def create_schema(conn: sqlite3.Connection):
         FOREIGN KEY(gfx_id) REFERENCES gfx(gfx_id)
     );
     """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_gfx_id ON gfx(gfx_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_gfx_name ON gfx(name);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_segment_gfx_id ON gfx_timing_segment(gfx_id);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_anim_gfx_id ON gfx_animation(gfx_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_anim_segment_id ON gfx_animation(segment_id);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_anim_action_name ON gfx_animation(action_name);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_anim_weapon ON gfx_animation(weapon);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_anim_action_weapon ON gfx_animation(action_name, weapon);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_ref_gfx_id ON gfx_reference(gfx_id);")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_gfx_name ON gfx(name);")
     conn.commit()
 
 
@@ -143,12 +161,15 @@ def index_client_gfx(
     gfx_records = []
     anim_records = []
     ref_records = []
+    timing_segments = []
+
+    segment_id_counter = 1
 
     current_gfx = None
-    current_gfx_framerate = None
+    current_seg_index = 0
+    active_segment = None
 
     line_num = 0
-    offset = 0
 
     with open(source_path, "r", encoding="utf-8", errors="ignore") as f:
         while True:
@@ -160,7 +181,7 @@ def index_client_gfx(
             line_str = line.strip()
 
             if line_str.startswith("#"):
-                # Finalize previous GFX end line
+                # Finalize previous GFX and its active segment
                 if current_gfx:
                     current_gfx["end_line"] = line_num - 1
                     current_gfx["end_offset"] = line_start_offset
@@ -174,6 +195,12 @@ def index_client_gfx(
                         current_gfx["start_offset"],
                         current_gfx["end_offset"]
                     ))
+
+                if active_segment:
+                    if active_segment["action_count"] > 0:
+                        active_segment["end_line"] = line_num - 1
+                        timing_segments.append(active_segment)
+                    active_segment = None
 
                 m = HEADER_RE.match(line_str)
                 if m:
@@ -192,9 +219,12 @@ def index_client_gfx(
                         "end_line": line_num,
                         "end_offset": line_start_offset
                     }
-                    current_gfx_framerate = None
+                    current_seg_index = 0
+                    active_segment = None
                 else:
                     current_gfx = None
+                    current_seg_index = 0
+                    active_segment = None
 
             elif current_gfx and line_str:
                 m = ACTION_RE.match(line_str)
@@ -203,18 +233,41 @@ def index_client_gfx(
                     raw_act_name = m.group(2).strip()
                     content = m.group(3).strip()
 
-                    # Framerate
+                    # Framerate segment boundary
                     if raw_act_name == "framerate" or act_id == 110:
                         try:
-                            current_gfx_framerate = int(content)
+                            fr_val = int(content)
                         except ValueError:
-                            current_gfx_framerate = None
+                            fr_val = None
+
+                        if active_segment is not None and active_segment["action_count"] > 0:
+                            # Finalize previous segment with actions
+                            active_segment["end_line"] = line_num - 1
+                            timing_segments.append(active_segment)
+                            active_segment = None
+
+                        if active_segment is None:
+                            current_seg_index += 1
+                            active_segment = {
+                                "segment_id": segment_id_counter,
+                                "gfx_id": current_gfx["gfx_id"],
+                                "segment_index": current_seg_index,
+                                "framerate": fr_val,
+                                "start_line": line_num,
+                                "end_line": line_num,
+                                "action_count": 0
+                            }
+                            segment_id_counter += 1
+                        else:
+                            # Immediate consecutive framerate without intervening actions (override)
+                            active_segment["framerate"] = fr_val
+                            active_segment["start_line"] = line_num
+                            active_segment["end_line"] = line_num
                         continue
 
                     # References
                     if raw_act_name in ("shadow", "type", "clothes") or act_id in (101, 102, 105):
                         ref_type = raw_act_name if raw_act_name else str(act_id)
-                        # Content may have multiple IDs, e.g. "2 18317 18318"
                         tokens = content.split()
                         if ref_type == "clothes" and len(tokens) >= 2:
                             for cid in tokens[1:]:
@@ -240,6 +293,23 @@ def index_client_gfx(
                         act_name = "attack"
                         weapon = None
 
+                    # If an action appears before any framerate declaration
+                    if active_segment is None:
+                        current_seg_index += 1
+                        active_segment = {
+                            "segment_id": segment_id_counter,
+                            "gfx_id": current_gfx["gfx_id"],
+                            "segment_index": current_seg_index,
+                            "framerate": None,
+                            "start_line": line_num,
+                            "end_line": line_num,
+                            "action_count": 0
+                        }
+                        segment_id_counter += 1
+
+                    active_segment["action_count"] += 1
+                    active_segment["end_line"] = line_num
+
                     # Extract frame count
                     frame_count = None
                     f_match = FRAME_COUNT_RE.match(content)
@@ -251,17 +321,18 @@ def index_client_gfx(
 
                     anim_records.append((
                         current_gfx["gfx_id"],
+                        active_segment["segment_id"],
                         act_id,
                         act_name,
                         weapon,
                         frame_count,
-                        current_gfx_framerate,
+                        active_segment["framerate"],
                         content,
                         line_num,
                         line_num
                     ))
 
-        # Close final GFX
+        # Close final GFX and final segment
         if current_gfx:
             current_gfx["end_line"] = line_num
             current_gfx["end_offset"] = f.tell()
@@ -276,10 +347,15 @@ def index_client_gfx(
                 current_gfx["end_offset"]
             ))
 
+        if active_segment and active_segment["action_count"] > 0:
+            active_segment["end_line"] = line_num
+            timing_segments.append(active_segment)
+
     print(f"[INDEXER] Parsing complete in {time.perf_counter() - t0:.2f}s.")
-    print(f"          Total GFX parsed:        {len(gfx_records):,}")
-    print(f"          Total Animations parsed: {len(anim_records):,}")
-    print(f"          Total References parsed: {len(ref_records):,}")
+    print(f"          Total GFX parsed:             {len(gfx_records):,}")
+    print(f"          Total Timing Segments parsed: {len(timing_segments):,}")
+    print(f"          Total Animations parsed:      {len(anim_records):,}")
+    print(f"          Total References parsed:      {len(ref_records):,}")
 
     t1 = time.perf_counter()
     print("[INDEXER] Writing batches to SQLite...")
@@ -290,8 +366,16 @@ def index_client_gfx(
     """, gfx_records)
 
     cur.executemany("""
-    INSERT INTO gfx_animation (gfx_id, action_id, action_name, weapon, frame_count, frame_rate, raw_sequence, start_line, end_line)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO gfx_timing_segment (segment_id, gfx_id, segment_index, framerate, start_line, end_line, action_count)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, [
+        (s["segment_id"], s["gfx_id"], s["segment_index"], s["framerate"], s["start_line"], s["end_line"], s["action_count"])
+        for s in timing_segments
+    ])
+
+    cur.executemany("""
+    INSERT INTO gfx_animation (gfx_id, segment_id, action_id, action_name, weapon, frame_count, frame_rate, raw_sequence, start_line, end_line)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, anim_records)
 
     cur.executemany("""

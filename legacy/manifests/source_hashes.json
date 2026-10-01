@@ -9,7 +9,8 @@
       "total_lines": 155202,
       "version": "3.80",
       "source_id": "legacy-client-tw13081901",
-      "classification": "LEGACY_CLIENT_OBSERVED_3_80"
+      "classification": "LEGACY_CLIENT_OBSERVED",
+      "applicability": "CROSS_VERSION_AUXILIARY"
     }
   }
 }
