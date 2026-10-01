@@ -2,7 +2,7 @@
 tools/query_client_gfx.py - Targeted Archaeology Query CLI for Client GFX Evidence
 
 Classification:
-  LEGACY_CLIENT_OBSERVED_3_80 (CROSS_VERSION_AUXILIARY)
+  LEGACY_CLIENT_OBSERVED (CROSS_VERSION_AUXILIARY)
 
 Queries legacy/client/3.80/TW13081901.sqlite directly without reading raw files.
 """
@@ -13,7 +13,7 @@ import sys
 # Ensure repo root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from native_engine.evidence import ClientGfxEvidenceStore
+from legacy.archaeology.evidence import ClientGfxEvidenceStore
 
 
 def format_action_label(a) -> str:
@@ -25,7 +25,7 @@ def format_action_label(a) -> str:
 def display_gfx(rec, meta, show_framerate_only: bool = False, specific_action=None, specific_weapon=None):
     source_id = meta.get("source_id", "legacy-client-tw13081901")
     version = meta.get("version", "3.80")
-    classification = meta.get("classification", "LEGACY_CLIENT_OBSERVED_3_80")
+    classification = meta.get("classification", "LEGACY_CLIENT_OBSERVED")
     sha256 = meta.get("sha256", "UNKNOWN")
 
     print(f"Source:")
@@ -42,8 +42,18 @@ def display_gfx(rec, meta, show_framerate_only: bool = False, specific_action=No
     print(f"  {rec.sprite_id}")
     print(f"\nName:")
     print(f"  {rec.name or '(unnamed)'}")
+    
+    if len(rec.timing_segments) > 1:
+        fr_str = f"{rec.framerate} (multi-segment: {len(rec.timing_segments)} segments)"
+    else:
+        fr_str = f"{rec.framerate if rec.framerate is not None else 'UNKNOWN'}"
     print(f"\nFrameRate:")
-    print(f"  {rec.framerate if rec.framerate is not None else 'UNKNOWN'}")
+    print(f"  {fr_str}")
+
+    if rec.timing_segments:
+        print(f"\nTiming Segments ({len(rec.timing_segments)}):")
+        for seg in rec.timing_segments:
+            print(f"  - Segment {seg.segment_index}: framerate={seg.framerate}, actions={seg.action_count}, lines=L{seg.start_line}-L{seg.end_line}")
 
     if show_framerate_only:
         print(f"\nRaw evidence:")
@@ -64,6 +74,8 @@ def display_gfx(rec, meta, show_framerate_only: bool = False, specific_action=No
             print(f"  - Action {a.action_id}: {lbl}")
             print(f"      Frames:        {a.frame_count}")
             print(f"      FrameRate:     {a.frame_rate or rec.framerate or 'UNKNOWN'}")
+            if a.segment_id:
+                print(f"      Segment ID:    {a.segment_id}")
             print(f"      Sequence:      {a.raw_sequence[:60]}{'...' if len(a.raw_sequence) > 60 else ''}")
             print(f"      Raw evidence:  TW13081901.txt:L{a.start_line}-L{a.end_line}")
     else:
@@ -132,6 +144,8 @@ def main():
             print(f"GFX {a.gfx_id:5d} ({gname}):")
             print(f"  Action:        {lbl}")
             print(f"  FrameRate:     {a.frame_rate or (gfx_rec.framerate if gfx_rec else None) or 'UNKNOWN'}")
+            if a.segment_id:
+                print(f"  Segment ID:    {a.segment_id}")
             print(f"  Raw evidence:  TW13081901.txt:L{a.start_line}-L{a.end_line}")
             print(f"  Sequence:      {a.raw_sequence[:60]}...")
             print("-" * 40)

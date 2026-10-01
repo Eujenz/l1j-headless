@@ -3,15 +3,16 @@ tests/test_archaeology_index.py - Verification for Phase A Legacy Evidence Corpu
 
 Validates:
 - Manifest source hashes and metadata consistency.
-- SQLite database integrity for TW13081901.sqlite.
+- SQLite database integrity for TW13081901.sqlite (with timing segments).
 - Exact line tracking and byte offset validity.
+- Reproducibility policy (skipUnless if SQLite index not generated).
 """
 import json
 import os
 import sqlite3
 import unittest
 
-from native_engine.evidence import ClientGfxEvidenceStore
+from legacy.archaeology.evidence import ClientGfxEvidenceStore
 
 
 class TestArchaeologyIndex(unittest.TestCase):
@@ -26,7 +27,7 @@ class TestArchaeologyIndex(unittest.TestCase):
         self.assertIn("legacy-client-tw13081901", sources)
         client_src = sources["legacy-client-tw13081901"]
         self.assertEqual(client_src["version"], "3.80")
-        self.assertEqual(client_src["classification"], "LEGACY_CLIENT_OBSERVED_3_80")
+        self.assertEqual(client_src["classification"], "LEGACY_CLIENT_OBSERVED")
         self.assertEqual(client_src["applicability"], "CROSS_VERSION_AUXILIARY")
         self.assertFalse(client_src["runtime_dependency"])
 
@@ -41,11 +42,11 @@ class TestArchaeologyIndex(unittest.TestCase):
         self.assertEqual(h["sha256"], "ddcbd759d4124877768990db505a8b1f7b7cbba23e7e78fe7e3fafd4bda356fe")
         self.assertEqual(h["total_lines"], 155202)
         self.assertEqual(h["size_bytes"], 7412363)
+        self.assertEqual(h["classification"], "LEGACY_CLIENT_OBSERVED")
 
+    @unittest.skipUnless(os.path.exists("legacy/client/3.80/TW13081901.sqlite"), "SQLite index not generated")
     def test_sqlite_db_integrity(self):
         db_path = "legacy/client/3.80/TW13081901.sqlite"
-        self.assertTrue(os.path.exists(db_path), f"Missing SQLite index at {db_path}")
-
         conn = sqlite3.connect(db_path)
         cur = conn.cursor()
 
@@ -55,12 +56,17 @@ class TestArchaeologyIndex(unittest.TestCase):
         self.assertIsNotNone(src_row)
         self.assertEqual(src_row[0], "legacy-client-tw13081901")
         self.assertEqual(src_row[1], "3.80")
-        self.assertEqual(src_row[2], "LEGACY_CLIENT_OBSERVED_3_80")
+        self.assertEqual(src_row[2], "LEGACY_CLIENT_OBSERVED")
 
         # Check gfx count (> 22,000)
         cur.execute("SELECT count(*) FROM gfx;")
         gfx_count = cur.fetchone()[0]
         self.assertGreaterEqual(gfx_count, 22000)
+
+        # Check timing segments count (> 15,000)
+        cur.execute("SELECT count(*) FROM gfx_timing_segment;")
+        seg_count = cur.fetchone()[0]
+        self.assertGreaterEqual(seg_count, 15000)
 
         # Check animations count (> 100,000)
         cur.execute("SELECT count(*) FROM gfx_animation;")

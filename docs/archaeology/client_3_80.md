@@ -7,7 +7,7 @@
 - **Layer**: Client (客戶端動作/精靈動畫資料表)
 - **Client Version**: **3.80** (臺灣版本)
 - **Target Version**: **1.83 / 1.82**
-- **Classification**: `LEGACY_CLIENT_OBSERVED_3_80`
+- **Classification**: `LEGACY_CLIENT_OBSERVED`
 - **Applicability**: `CROSS_VERSION_AUXILIARY`
 - **Runtime Dependency**: `false` (嚴禁在遊戲執行期直接讀取)
 - **File Metrics**:

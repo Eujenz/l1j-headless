@@ -1,0 +1,3 @@
+"""
+legacy/archaeology package
+"""
