@@ -64,6 +64,8 @@ class Actor:
     lawful: int = 0
     is_dead: bool = False
     ac: int = 10
+    mp: int = 10
+    max_mp: int = 10
     # LEGACY_OBSERVED: GFX 61 (Male Knight), mode 4 (Sword/Dagger), move=640ms, attack=880ms
     gfx: int = 61
     gfx_mode: int = 4
