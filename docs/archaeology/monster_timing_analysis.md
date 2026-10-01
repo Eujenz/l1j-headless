@@ -8,7 +8,7 @@
 > **重大判定：`SPRITE_FRAME_PC_ONLY` (Case B)**
 > 1. **怪物完全不使用 `sprite_frame.sql` 或 `SprTable.java`**。
 > 2. `sprite_frame.sql` 與 `SprTable` 僅為玩家角色 (`PcInstance`) 之防加速檢測 (`CheckSpeed.java`) 服務。
-> 3. 怪物 AI 由獨立線程 `MonAi.java` 以 **`30 ms` 全域 Tick** 進行輪詢驅動。
+> 3. 怪物 AI 由獨立線程 `MonAi.java` 以 **`30 ms` 全域輪詢間隔 (AI Polling Interval)** 驅動門檻檢測，與怪物的動作間隔 (`modespeed`) 完全分離。
 > 4. 怪物的動作時間來自 `Monster.modespeed`（由 `client/list.spr` 初始化），未命中時之普適 Fallback 為 **`1000 ms`**。
 > 5. 怪物移動判定動作為 `GfxMode`，攻擊判定動作為 `GfxMode + 1`。
 
@@ -101,7 +101,7 @@ if (getDistance(cha.getX(), cha.getY(), cha.getMap(), this.Areaatk) && LongAttac
 ### 4.2 核心規律
 1. **攻擊 Action ID ＝ `getGfxMode() + 1`**：無論近戰或是遠程，攻擊動作模式皆為移動模式 + 1（一般為模式 1）。
 2. **攻擊間隔 ＝ `getMon().getModespeed(getGfxMode() + 1)`**：若未定義則 Fallback 為 **`1000 ms`**。
-3. 怪物攻擊**沒有獨立的攻擊計時器線程**，而是透過將下一次 AI 觸發時間 `ai_time` 設為攻擊動作時長，達成「攻擊後等待後搖結束才能進行下一次行動」的效果。
+3. 怪物攻擊**沒有獨立的攻擊計時器線程**，而是透過將下一次 AI 觸發時間門檻設為 `time + modespeed`，達成「攻擊發起後，在 Action Interval 時間窗口未結束前禁止通過 isAi 閘門發起下一次行動」的效果。
 
 ---
 

@@ -12,10 +12,10 @@
 
 > [!IMPORTANT]
 > **重大實證結論**：
-> 1. **傷害結算為瞬間完成 (`DAMAGE_TIMING = IMMEDIATE`)**：
->    無論是 PC 還是 Monster，近戰或是遠程，傷害計算與目標血量扣減均在 `Attack()` 呼叫的當下**同步且立即完成**，不存在任何攻擊前搖延遲（No Pre-Damage Delay）。
-> 2. **Action Timing 實質為「動作後搖與冷卻間隔」(`ACTION_INTERVAL`)**：
->    `sprite_frame.frame` (PC) 與 `Monster.modespeed` (Monster) 所定義的毫秒數，在伺服器端本質代表的是**「完成此次動作後，到允許發起下一次動作之間的強制冷卻跨度」**。
+> 1. **物理攻擊傷害結算為瞬間完成 (`DAMAGE_TIMING = IMMEDIATE`)**：
+>    已驗證之 PC 與 Monster 標準物理攻擊（含近戰與弓箭），傷害計算與目標血量扣減均在 `Attack()` 呼叫的當下**同步且立即完成**，不存在任何攻擊前搖延遲（No Pre-Damage Delay）。（注意：此結論限於常規物理打擊，特殊延遲法術或 DOT 需個別依源碼驗證）。
+> 2. **Action Timing 實質為「動作間隔閘門」(`ACTION_INTERVAL`)**：
+>    `sprite_frame.frame` (PC) 與 `Monster.modespeed` (Monster) 所定義的毫秒數，在伺服器端本質代表的是**「從動作發起瞬刻起算，到允許發起下一次動作之間的強制時間窗口 (Action Interval Gate)」**，伺服器端並不存在『攻擊動畫播放完成』才開始計算冷卻的事件機制。
 > 3. **PC 端為事後檢驗，Monster 端為主動門檻**：
 >    - PC：伺服器假設正常客戶端會受 DirectDraw 動畫播放限制發包，伺服器透過 `CheckSpeed.java` 進行被動校驗。
 >    - Monster：伺服器透過 `MonAi.java`（30ms 輪詢）在 `ai_start_time + speed` 前主動阻擋下一次行動。
@@ -150,9 +150,9 @@ Final Action Interval (即為下一次 Action 前需等待的毫秒數)
 | 詞彙 (Vocabulary) | 嚴格定義 (Definition) | 1.82 實證來源 | 誤用警語 |
 | :--- | :--- | :--- | :--- |
 | **Animation Duration** | 客戶端動畫序列從第 0 幀播放至最後一幀的視覺呈現時間。 | `list.spr`, `TW13081901.txt` | 嚴禁誤用為傷害生效時間！ |
-| **Action Interval** | 實體發起動作到允許發起下一次同類或異類動作的最小合法時間跨度。 | `sprite_frame.sql`, `Monster.modespeed` | 本專案 Temporal Runtime 之核心基準。 |
-| **Damage Timing** | 攻擊判定、命中計算與目標 HP 扣減在時間軸上實際發生的時間點（**1.82 恆為 IMMEDIATE**）。 | `PcInstance.java:631`<br>`NpcInstance.java:327` | 嚴禁自行假設攻擊前搖延遲！ |
-| **Attack Cooldown** | 攻擊動作發起後，禁止再次發起攻擊的等待後搖時長（數值等於 Attack Action Interval）。 | `CheckSpeed.java:99`<br>`MonsterInstance.java:300` | 與 Skill Reuse Delay 分離。 |
+| **Action Interval** | 實體發起動作到允許發起下一次同類或異類動作的最小合法時間跨度（Action Interval Gate）。 | `sprite_frame.sql`, `Monster.modespeed` | 本專案 Temporal Runtime 之核心基準。 |
+| **Damage Timing** | 攻擊判定、命中計算與目標 HP 扣減在時間軸上實際發生的時間點（**已驗證之標準物理攻擊為 IMMEDIATE**）。 | `PcInstance.java:631`<br>`NpcInstance.java:327` | 嚴禁自行假設攻擊前搖延遲！特殊法術需獨立驗證。 |
+| **Attack Cooldown** | 攻擊動作發起後，禁止再次發起攻擊的等待時間窗口（數值等於 Attack Action Interval）。 | `CheckSpeed.java:99`<br>`MonsterInstance.java:300` | 與 Skill Reuse Delay 分離。 |
 | **Skill Reuse Delay** | 個別特定魔法在資料庫定義的專屬重用冷卻時間。 | `skills.reuse_delay`, `PcSkill.java:123` | 獨立於全域動作間隔。 |
 | **AI Tick** | 伺服器怪物 AI 執行緒的基礎輪詢掃描頻率（**固定為 30 ms**）。 | `MonAi.java:31` (`SleepTime = 30`) | 嚴禁誤用為怪物攻速！ |
 | **Anti-Cheat Threshold** | 伺服器端校驗客戶端封包是否異常過快的容忍閥值。 | `CheckSpeed.java:65-67` | 這是安全門檻，非客戶端調度器。 |
@@ -161,8 +161,8 @@ Final Action Interval (即為下一次 Action 前需等待的毫秒數)
 
 ## 10. 已確認之 Canonical 事實 (Confirmed Canonical Facts)
 
-1. **`DAMAGE_TIMING_IMMEDIATE`**: L1J 1.82 伺服器在收到攻擊請求或怪物決定攻擊時，**立即進行命中與傷害結算，無前搖時間差**。
-2. **`ACTION_INTERVAL_AS_COOLDOWN`**: `sprite_frame.frame` 與 `modespeed` 代表的是**動作完成後的冷卻後搖間隔**。
+1. **`DAMAGE_TIMING_IMMEDIATE`**: L1J 1.82 伺服器在收到常規物理攻擊請求或怪物決定常規物理攻擊時，**立即進行命中與傷害結算，無前搖時間差**。
+2. **`ACTION_INTERVAL_GATE`**: `sprite_frame.frame` 與 `modespeed` 代表的是**從動作觸發起算至允許下一次行動的保護窗口**。
 3. **`SYNCHRONOUS_REMOTE_DAMAGE`**: 遠程物理攻擊（弓箭）在伺服器端同樣立即扣血，箭矢飛行時間僅為客戶端動畫效果。
 4. **`DUAL_TIMING_FOR_SKILLS`**: 施法同時受「全域施法動作間隔 (800~880ms)」與「技能專屬 ReuseDelay」雙重約束。
 

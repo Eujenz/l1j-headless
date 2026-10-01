@@ -40,7 +40,7 @@ CREATE TABLE `sprite_frame` (
 | `gfx` | `int(10) unsigned` | 外形 GFX / Sprite ID | 伺服器角色與怪物外形識別碼，在 Java `SprTable` 中做為 Map 的查詢主鍵 (Key)。 |
 | `action` | `int(10) unsigned` | 動作編號 (Action ID) | 與客戶端動畫 Action ID 嚴格對應（0 為移動、1 為空手攻擊、5 為單手劍攻擊等）。 |
 | `action_name` | `varchar(255)` | 動作名稱敘述 | 如 `walk`, `attack`, `attack sword`, `spell direction` 等，輔助人類判讀。 |
-| **`frame`** | **`int(10) unsigned`** | **動作基準時長 (毫秒 ms)** | **核心發現：名稱雖為 `frame`，但數值不是幀數，而是該動作的基礎持續時長（毫秒 ms）！** |
+| **`frame`** | **`int(10) unsigned`** | **動作間隔閘門 (毫秒 ms)** | **核心發現：名稱雖為 `frame`，但數值不是幀數，而是動作發起到允許下一次行動的動作間隔時間窗口 (Action Interval 毫秒 ms)！** |
 
 ### `frame` 數值分佈實證：
 - 最小值: `480` ms (某些特殊快速動作)
