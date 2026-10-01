@@ -135,3 +135,32 @@ class WorldRoutePlanned(DomainEvent):
     goal_map: int
     map_sequence: list
     transition_ids: list
+
+
+# --- SCENARIO 007 GAMEPLAY & PROGRESSION EVENTS ---
+@dataclass
+class LevelUp(DomainEvent):
+    actor_id: int
+    old_level: int
+    new_level: int
+    new_max_hp: int
+
+@dataclass
+class WeaponEquipped(DomainEvent):
+    actor_id: int
+    item_id: int
+    name: str
+
+@dataclass
+class WeaponUnequipped(DomainEvent):
+    actor_id: int
+    item_id: int
+    name: str
+
+@dataclass
+class EncounterTriggered(DomainEvent):
+    actor_id: int
+    monster_id: int
+    monster_name: str
+    x: int
+    y: int
