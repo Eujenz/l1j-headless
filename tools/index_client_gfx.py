@@ -17,6 +17,7 @@ import re
 import sqlite3
 import sys
 import time
+from typing import Any, Dict, List, Optional, Tuple
 
 SOURCE_ID = "legacy-client-tw13081901"
 VERSION = "3.80"
@@ -113,6 +114,215 @@ def compute_sha256(filepath: str) -> str:
     return sha.hexdigest()
 
 
+def parse_client_gfx_stream(stream, version: str = VERSION) -> Tuple[List[Any], List[Any], List[Any], List[Any]]:
+    """
+    Pure parser that processes lines from any text stream.
+    Returns: (gfx_records, timing_segments, anim_records, ref_records)
+    """
+    gfx_records = []
+    anim_records = []
+    ref_records = []
+    timing_segments = []
+
+    segment_id_counter = 1
+
+    current_gfx = None
+    current_seg_index = 0
+    active_segment = None
+
+    line_num = 0
+
+    while True:
+        try:
+            line_start_offset = stream.tell()
+        except (AttributeError, OSError):
+            line_start_offset = 0
+
+        line = stream.readline()
+        if not line:
+            break
+        line_num += 1
+        line_str = line.strip()
+
+        if line_str.startswith("#"):
+            # Finalize previous GFX and its active segment
+            if current_gfx:
+                current_gfx["end_line"] = line_num - 1
+                current_gfx["end_offset"] = line_start_offset
+                gfx_records.append((
+                    current_gfx["gfx_id"],
+                    current_gfx["sprite_id"],
+                    current_gfx["name"],
+                    version,
+                    current_gfx["start_line"],
+                    current_gfx["end_line"],
+                    current_gfx["start_offset"],
+                    current_gfx["end_offset"]
+                ))
+
+            if active_segment:
+                if active_segment["action_count"] > 0:
+                    active_segment["end_line"] = line_num - 1
+                    timing_segments.append(active_segment)
+                active_segment = None
+
+            m = HEADER_RE.match(line_str)
+            if m:
+                gfx_id = int(m.group(1))
+                try:
+                    sprite_id = int(m.group(2))
+                except ValueError:
+                    sprite_id = 0
+                name = m.group(4) or ""
+                current_gfx = {
+                    "gfx_id": gfx_id,
+                    "sprite_id": sprite_id,
+                    "name": name,
+                    "start_line": line_num,
+                    "start_offset": line_start_offset,
+                    "end_line": line_num,
+                    "end_offset": line_start_offset
+                }
+                current_seg_index = 0
+                active_segment = None
+            else:
+                current_gfx = None
+                current_seg_index = 0
+                active_segment = None
+
+        elif current_gfx and line_str:
+            m = ACTION_RE.match(line_str)
+            if m:
+                act_id = int(m.group(1))
+                raw_act_name = m.group(2).strip()
+                content = m.group(3).strip()
+
+                # Framerate segment boundary
+                if raw_act_name == "framerate" or act_id == 110:
+                    try:
+                        fr_val = int(content)
+                    except ValueError:
+                        fr_val = None
+
+                    if active_segment is not None and active_segment["action_count"] > 0:
+                        # Finalize previous segment with actions
+                        active_segment["end_line"] = line_num - 1
+                        timing_segments.append(active_segment)
+                        active_segment = None
+
+                    if active_segment is None:
+                        current_seg_index += 1
+                        active_segment = {
+                            "segment_id": segment_id_counter,
+                            "gfx_id": current_gfx["gfx_id"],
+                            "segment_index": current_seg_index,
+                            "framerate": fr_val,
+                            "start_line": line_num,
+                            "end_line": line_num,
+                            "action_count": 0
+                        }
+                        segment_id_counter += 1
+                    else:
+                        # Immediate consecutive framerate without intervening actions (override)
+                        active_segment["framerate"] = fr_val
+                        active_segment["start_line"] = line_num
+                        active_segment["end_line"] = line_num
+                    continue
+
+                # References
+                if raw_act_name in ("shadow", "type", "clothes") or act_id in (101, 102, 105):
+                    ref_type = raw_act_name if raw_act_name else str(act_id)
+                    tokens = content.split()
+                    if ref_type == "clothes" and len(tokens) >= 2:
+                        for cid in tokens[1:]:
+                            try:
+                                ref_records.append((current_gfx["gfx_id"], ref_type, int(cid)))
+                            except ValueError:
+                                pass
+                    else:
+                        for token in tokens:
+                            try:
+                                ref_records.append((current_gfx["gfx_id"], ref_type, int(token)))
+                            except ValueError:
+                                pass
+                    continue
+
+                # Regular Actions
+                act_name = raw_act_name
+                weapon = None
+                if raw_act_name.startswith("attack "):
+                    act_name = "attack"
+                    weapon = raw_act_name[7:].strip()
+                elif raw_act_name == "attack":
+                    act_name = "attack"
+                    weapon = None
+
+                # If an action appears before any framerate declaration
+                if active_segment is None:
+                    current_seg_index += 1
+                    active_segment = {
+                        "segment_id": segment_id_counter,
+                        "gfx_id": current_gfx["gfx_id"],
+                        "segment_index": current_seg_index,
+                        "framerate": None,
+                        "start_line": line_num,
+                        "end_line": line_num,
+                        "action_count": 0
+                    }
+                    segment_id_counter += 1
+
+                active_segment["action_count"] += 1
+                active_segment["end_line"] = line_num
+
+                # Extract frame count
+                frame_count = None
+                f_match = FRAME_COUNT_RE.match(content)
+                if f_match:
+                    try:
+                        frame_count = int(f_match.group(1))
+                    except ValueError:
+                        frame_count = None
+
+                anim_records.append((
+                    current_gfx["gfx_id"],
+                    active_segment["segment_id"],
+                    act_id,
+                    act_name,
+                    weapon,
+                    frame_count,
+                    active_segment["framerate"],
+                    content,
+                    line_num,
+                    line_num
+                ))
+
+    # Close final GFX and final segment
+    if current_gfx:
+        try:
+            final_offset = stream.tell()
+        except (AttributeError, OSError):
+            final_offset = 0
+
+        current_gfx["end_line"] = line_num
+        current_gfx["end_offset"] = final_offset
+        gfx_records.append((
+            current_gfx["gfx_id"],
+            current_gfx["sprite_id"],
+            current_gfx["name"],
+            version,
+            current_gfx["start_line"],
+            current_gfx["end_line"],
+            current_gfx["start_offset"],
+            current_gfx["end_offset"]
+        ))
+
+    if active_segment and active_segment["action_count"] > 0:
+        active_segment["end_line"] = line_num
+        timing_segments.append(active_segment)
+
+    return gfx_records, timing_segments, anim_records, ref_records
+
+
 def index_client_gfx(
     source_path: str = "TW13081901.txt",
     db_path: str = "legacy/client/3.80/TW13081901.sqlite",
@@ -158,198 +368,8 @@ def index_client_gfx(
     t0 = time.perf_counter()
     print("[INDEXER] Scanning lines and building SQLite index...")
 
-    gfx_records = []
-    anim_records = []
-    ref_records = []
-    timing_segments = []
-
-    segment_id_counter = 1
-
-    current_gfx = None
-    current_seg_index = 0
-    active_segment = None
-
-    line_num = 0
-
     with open(source_path, "r", encoding="utf-8", errors="ignore") as f:
-        while True:
-            line_start_offset = f.tell()
-            line = f.readline()
-            if not line:
-                break
-            line_num += 1
-            line_str = line.strip()
-
-            if line_str.startswith("#"):
-                # Finalize previous GFX and its active segment
-                if current_gfx:
-                    current_gfx["end_line"] = line_num - 1
-                    current_gfx["end_offset"] = line_start_offset
-                    gfx_records.append((
-                        current_gfx["gfx_id"],
-                        current_gfx["sprite_id"],
-                        current_gfx["name"],
-                        VERSION,
-                        current_gfx["start_line"],
-                        current_gfx["end_line"],
-                        current_gfx["start_offset"],
-                        current_gfx["end_offset"]
-                    ))
-
-                if active_segment:
-                    if active_segment["action_count"] > 0:
-                        active_segment["end_line"] = line_num - 1
-                        timing_segments.append(active_segment)
-                    active_segment = None
-
-                m = HEADER_RE.match(line_str)
-                if m:
-                    gfx_id = int(m.group(1))
-                    try:
-                        sprite_id = int(m.group(2))
-                    except ValueError:
-                        sprite_id = 0
-                    name = m.group(4) or ""
-                    current_gfx = {
-                        "gfx_id": gfx_id,
-                        "sprite_id": sprite_id,
-                        "name": name,
-                        "start_line": line_num,
-                        "start_offset": line_start_offset,
-                        "end_line": line_num,
-                        "end_offset": line_start_offset
-                    }
-                    current_seg_index = 0
-                    active_segment = None
-                else:
-                    current_gfx = None
-                    current_seg_index = 0
-                    active_segment = None
-
-            elif current_gfx and line_str:
-                m = ACTION_RE.match(line_str)
-                if m:
-                    act_id = int(m.group(1))
-                    raw_act_name = m.group(2).strip()
-                    content = m.group(3).strip()
-
-                    # Framerate segment boundary
-                    if raw_act_name == "framerate" or act_id == 110:
-                        try:
-                            fr_val = int(content)
-                        except ValueError:
-                            fr_val = None
-
-                        if active_segment is not None and active_segment["action_count"] > 0:
-                            # Finalize previous segment with actions
-                            active_segment["end_line"] = line_num - 1
-                            timing_segments.append(active_segment)
-                            active_segment = None
-
-                        if active_segment is None:
-                            current_seg_index += 1
-                            active_segment = {
-                                "segment_id": segment_id_counter,
-                                "gfx_id": current_gfx["gfx_id"],
-                                "segment_index": current_seg_index,
-                                "framerate": fr_val,
-                                "start_line": line_num,
-                                "end_line": line_num,
-                                "action_count": 0
-                            }
-                            segment_id_counter += 1
-                        else:
-                            # Immediate consecutive framerate without intervening actions (override)
-                            active_segment["framerate"] = fr_val
-                            active_segment["start_line"] = line_num
-                            active_segment["end_line"] = line_num
-                        continue
-
-                    # References
-                    if raw_act_name in ("shadow", "type", "clothes") or act_id in (101, 102, 105):
-                        ref_type = raw_act_name if raw_act_name else str(act_id)
-                        tokens = content.split()
-                        if ref_type == "clothes" and len(tokens) >= 2:
-                            for cid in tokens[1:]:
-                                try:
-                                    ref_records.append((current_gfx["gfx_id"], ref_type, int(cid)))
-                                except ValueError:
-                                    pass
-                        else:
-                            for token in tokens:
-                                try:
-                                    ref_records.append((current_gfx["gfx_id"], ref_type, int(token)))
-                                except ValueError:
-                                    pass
-                        continue
-
-                    # Regular Actions
-                    act_name = raw_act_name
-                    weapon = None
-                    if raw_act_name.startswith("attack "):
-                        act_name = "attack"
-                        weapon = raw_act_name[7:].strip()
-                    elif raw_act_name == "attack":
-                        act_name = "attack"
-                        weapon = None
-
-                    # If an action appears before any framerate declaration
-                    if active_segment is None:
-                        current_seg_index += 1
-                        active_segment = {
-                            "segment_id": segment_id_counter,
-                            "gfx_id": current_gfx["gfx_id"],
-                            "segment_index": current_seg_index,
-                            "framerate": None,
-                            "start_line": line_num,
-                            "end_line": line_num,
-                            "action_count": 0
-                        }
-                        segment_id_counter += 1
-
-                    active_segment["action_count"] += 1
-                    active_segment["end_line"] = line_num
-
-                    # Extract frame count
-                    frame_count = None
-                    f_match = FRAME_COUNT_RE.match(content)
-                    if f_match:
-                        try:
-                            frame_count = int(f_match.group(1))
-                        except ValueError:
-                            frame_count = None
-
-                    anim_records.append((
-                        current_gfx["gfx_id"],
-                        active_segment["segment_id"],
-                        act_id,
-                        act_name,
-                        weapon,
-                        frame_count,
-                        active_segment["framerate"],
-                        content,
-                        line_num,
-                        line_num
-                    ))
-
-        # Close final GFX and final segment
-        if current_gfx:
-            current_gfx["end_line"] = line_num
-            current_gfx["end_offset"] = f.tell()
-            gfx_records.append((
-                current_gfx["gfx_id"],
-                current_gfx["sprite_id"],
-                current_gfx["name"],
-                VERSION,
-                current_gfx["start_line"],
-                current_gfx["end_line"],
-                current_gfx["start_offset"],
-                current_gfx["end_offset"]
-            ))
-
-        if active_segment and active_segment["action_count"] > 0:
-            active_segment["end_line"] = line_num
-            timing_segments.append(active_segment)
+        gfx_records, timing_segments, anim_records, ref_records = parse_client_gfx_stream(f, version=VERSION)
 
     print(f"[INDEXER] Parsing complete in {time.perf_counter() - t0:.2f}s.")
     print(f"          Total GFX parsed:             {len(gfx_records):,}")
