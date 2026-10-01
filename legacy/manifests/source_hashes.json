@@ -1,0 +1,15 @@
+{
+  "manifest_version": "1.0",
+  "generated_at": "2026-10-01T11:45:00+08:00",
+  "hashes": {
+    "TW13081901.txt": {
+      "path": "TW13081901.txt",
+      "sha256": "ddcbd759d4124877768990db505a8b1f7b7cbba23e7e78fe7e3fafd4bda356fe",
+      "size_bytes": 7412363,
+      "total_lines": 155202,
+      "version": "3.80",
+      "source_id": "legacy-client-tw13081901",
+      "classification": "LEGACY_CLIENT_OBSERVED_3_80"
+    }
+  }
+}

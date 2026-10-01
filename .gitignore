@@ -7,3 +7,7 @@ __pycache__/
 .env
 .venv/
 venv/
+TW13081901.txt
+*.sqlite
+*.sqlite3
+scratch/

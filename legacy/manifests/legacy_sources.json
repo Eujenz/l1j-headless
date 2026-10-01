@@ -1,0 +1,103 @@
+{
+  "manifest_schema": "1.0",
+  "project": "l1j-headless",
+  "evidence_hierarchy": [
+    "SERVER_1.82",
+    "MAP_1.82",
+    "CLIENT_3.80",
+    "EXTERNAL_REFERENCE"
+  ],
+  "classification_taxonomy": [
+    "LEGACY_OBSERVED",
+    "LEGACY_CLIENT_OBSERVED",
+    "CROSS_VERSION_AUXILIARY",
+    "DERIVED_CANONICAL",
+    "CONTROLLED_SUBSTITUTION",
+    "MODERN_DESIGN",
+    "INFERRED",
+    "UNKNOWN",
+    "EXTERNAL_ARCHITECTURE_REFERENCE"
+  ],
+  "sources": {
+    "legacy-client-tw13081901": {
+      "source_id": "legacy-client-tw13081901",
+      "product": "Lineage",
+      "layer": "client",
+      "version": "3.80",
+      "target_version": "1.83",
+      "classification": "LEGACY_CLIENT_OBSERVED_3_80",
+      "applicability": "CROSS_VERSION_AUXILIARY",
+      "authority": "client_asset_evidence",
+      "runtime_dependency": false,
+      "canonical_filename": "TW13081901.txt",
+      "sha256": "ddcbd759d4124877768990db505a8b1f7b7cbba23e7e78fe7e3fafd4bda356fe",
+      "total_lines": 155202,
+      "size_bytes": 7412363,
+      "sqlite_index_path": "legacy/client/3.80/TW13081901.sqlite",
+      "notes": "Taiwan Lineage 3.80 client sprite/action animation definition table. Contains 22,536 GFX definitions with framerates, actions, and weapon variants. Strictly auxilary: 3.80 data != 1.83 canonical timing."
+    },
+    "legacy-server-182c": {
+      "source_id": "legacy-server-182c",
+      "product": "Lineage",
+      "layer": "server",
+      "version": "1.82c",
+      "target_version": "1.83",
+      "classification": "LEGACY_OBSERVED",
+      "applicability": "PRIMARY_SERVER_AUTHORITY",
+      "authority": "server_source_code",
+      "runtime_dependency": false,
+      "source_repository": "Eujenz/182c",
+      "notes": "Java reference server implementation for Lineage 1.82c. Provides ground truth for Character stat dice, combat damage calculations, portal transitions, and server-side packet handlers."
+    },
+    "legacy-db-lineage-sql": {
+      "source_id": "legacy-db-lineage-sql",
+      "product": "Lineage",
+      "layer": "database",
+      "version": "1.82c",
+      "target_version": "1.83",
+      "classification": "LEGACY_OBSERVED",
+      "applicability": "PRIMARY_DATA_AUTHORITY",
+      "authority": "database_export",
+      "runtime_dependency": false,
+      "source_tables": [
+        "monster.sql",
+        "monster_spawnlist.sql",
+        "items.sql",
+        "exp.sql",
+        "sprite_frame.sql",
+        "npc.sql"
+      ],
+      "notes": "Official MySQL database dumps for 1.82c containing monster stats, spawn records, items, exp curves, and speed verification frames."
+    },
+    "legacy-map-cache": {
+      "source_id": "legacy-map-cache",
+      "product": "Lineage",
+      "layer": "map",
+      "version": "1.82",
+      "target_version": "1.83",
+      "classification": "LEGACY_OBSERVED",
+      "applicability": "PRIMARY_GEOMETRY_AUTHORITY",
+      "authority": "map_binary_data",
+      "runtime_dependency": false,
+      "source_files": [
+        "maps/maps.csv",
+        "maps/Cache/0.data",
+        "maps/Cache/1.data"
+      ],
+      "notes": "Decoded Lineage 1.82 map binaries for Talking Island Surface (Map 0) and Talking Island Dungeon 1F (Map 1)."
+    },
+    "external-openkore": {
+      "source_id": "external-openkore",
+      "product": "OpenKore",
+      "layer": "agent_architecture",
+      "version": "legacy-git",
+      "target_version": "N/A",
+      "classification": "EXTERNAL_ARCHITECTURE_REFERENCE",
+      "applicability": "ARCHITECTURE_INSPIRATION_ONLY",
+      "authority": "external_bot_framework",
+      "runtime_dependency": false,
+      "source_repository": "OpenKore/openkore",
+      "notes": "Used SOLELY as reference architecture for TaskScheduler, Perception, Policy, and Persistent Agent loops. STRICTLY FORBIDDEN from being cited as Lineage gameplay rule or timing evidence."
+    }
+  }
+}
