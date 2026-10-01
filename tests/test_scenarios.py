@@ -59,6 +59,21 @@ class TestCertifiedScenarios(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Scenario 006 MVP demo failed:\n{res.stdout}\n{res.stderr}")
         self.assertIn("DEMO COMPLETED SUCCESSFULLY", res.stdout)
 
+    def test_scenario_007_replay(self):
+        res = subprocess.run([sys.executable, "scenario_007_replay.py"], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(res.returncode, 0, f"Scenario 007 replay failed:\n{res.stdout}\n{res.stderr}")
+        self.assertIn("OVERALL STATUS: PASS", res.stdout)
+
+    def test_scenario_007_differential(self):
+        res = subprocess.run([sys.executable, "scenario_007_differential.py"], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        self.assertEqual(res.returncode, 0, f"Scenario 007 differential verification failed:\n{res.stdout}\n{res.stderr}")
+        self.assertIn("SCENARIO 007 CONFORMANCE CERTIFICATION: PASS", res.stdout)
+
+    def test_scenario_007_mvp_demo(self):
+        res = subprocess.run([sys.executable, "mvp.py", "--demo", "--s007"], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(res.returncode, 0, f"Scenario 007 demo failed:\n{res.stdout}\n{res.stderr}")
+        self.assertIn("SCENARIO 007 DEMO COMPLETED", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

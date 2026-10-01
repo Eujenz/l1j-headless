@@ -1,0 +1,39 @@
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 1, "name": "漂浮之眼", "level": 8, "hp": 35, "min_dmg": 0, "max_dmg": 0, "ac": 0, "exp": 50, "agro": 0, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 2, "name": "骷髏", "level": 10, "hp": 80, "min_dmg": 6, "max_dmg": 12, "ac": 0, "exp": 101, "agro": 0, "undead": 5}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 3, "name": "史萊姆", "level": 6, "hp": 20, "min_dmg": 2, "max_dmg": 6, "ac": 0, "exp": 37, "agro": 1, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 4, "name": "狼人", "level": 9, "hp": 50, "min_dmg": 4, "max_dmg": 10, "ac": 0, "exp": 82, "agro": 0, "undead": 5}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 5, "name": "長者", "level": 21, "hp": 250, "min_dmg": 15, "max_dmg": 30, "ac": 5, "exp": 442, "agro": 0, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 6, "name": "高侖石頭怪", "level": 13, "hp": 150, "min_dmg": 12, "max_dmg": 20, "ac": 1, "exp": 170, "agro": 1, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 7, "name": "人形僵屍", "level": 7, "hp": 40, "min_dmg": 5, "max_dmg": 10, "ac": 0, "exp": 37, "agro": 0, "undead": 5}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 8, "name": "侏儒", "level": 5, "hp": 15, "min_dmg": 4, "max_dmg": 8, "ac": 0, "exp": 26, "agro": 0, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 9, "name": "妖魔", "level": 2, "hp": 6, "min_dmg": 2, "max_dmg": 6, "ac": 0, "exp": 5, "agro": 0, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 12, "name": "妖魔鬥士", "level": 8, "hp": 40, "min_dmg": 6, "max_dmg": 12, "ac": 10, "exp": 65, "agro": 1, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 13, "name": "妖魔弓箭手", "level": 3, "hp": 12, "min_dmg": 2, "max_dmg": 6, "ac": 0, "exp": 10, "agro": 0, "undead": 0}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 18, "name": "食屍鬼", "level": 16, "hp": 110, "min_dmg": 12, "max_dmg": 20, "ac": 4, "exp": 257, "agro": 0, "undead": 5}
+{"type": "ORACLE_MONSTER_TEMPLATE", "monster_id": 55, "name": "哥布林", "level": 2, "hp": 9, "min_dmg": 3, "max_dmg": 5, "ac": 0, "exp": 5, "agro": 0, "undead": 0}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 1, "monster_id": 9, "map_id": 0, "spawn_x": 32689, "spawn_y": 32863, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 2, "monster_id": 9, "map_id": 0, "spawn_x": 32675, "spawn_y": 32865, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 22, "monster_id": 9, "map_id": 0, "spawn_x": 32487, "spawn_y": 32875, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 23, "monster_id": 9, "map_id": 0, "spawn_x": 32465, "spawn_y": 32873, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 96, "monster_id": 13, "map_id": 0, "spawn_x": 32573, "spawn_y": 32889, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 97, "monster_id": 13, "map_id": 0, "spawn_x": 32555, "spawn_y": 32870, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 118, "monster_id": 12, "map_id": 0, "spawn_x": 32559, "spawn_y": 32894, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 119, "monster_id": 12, "map_id": 0, "spawn_x": 32572, "spawn_y": 32855, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 180, "monster_id": 55, "map_id": 0, "spawn_x": 32590, "spawn_y": 32873, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 181, "monster_id": 55, "map_id": 0, "spawn_x": 32544, "spawn_y": 32867, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 183, "monster_id": 55, "map_id": 0, "spawn_x": 32497, "spawn_y": 32881, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 252, "monster_id": 3, "map_id": 0, "spawn_x": 32669, "spawn_y": 32847, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 253, "monster_id": 3, "map_id": 0, "spawn_x": 32693, "spawn_y": 32865, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 259, "monster_id": 3, "map_id": 0, "spawn_x": 32465, "spawn_y": 32875, "count": 4, "loc_size": 25, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 1751, "monster_id": 2, "map_id": 1, "spawn_x": 0, "spawn_y": 0, "count": 20, "loc_size": 0, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 1752, "monster_id": 7, "map_id": 1, "spawn_x": 0, "spawn_y": 0, "count": 20, "loc_size": 0, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 1753, "monster_id": 5, "map_id": 1, "spawn_x": 0, "spawn_y": 0, "count": 20, "loc_size": 0, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 1754, "monster_id": 6, "map_id": 1, "spawn_x": 0, "spawn_y": 0, "count": 20, "loc_size": 0, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 1755, "monster_id": 1, "map_id": 1, "spawn_x": 0, "spawn_y": 0, "count": 20, "loc_size": 0, "re_spawn": 300}
+{"type": "ORACLE_SPAWN_RECORD", "spawn_uid": 1756, "monster_id": 18, "map_id": 1, "spawn_x": 0, "spawn_y": 0, "count": 20, "loc_size": 0, "re_spawn": 300}
+{"type": "ORACLE_EXP_TABLE", "level": 1, "exp": 20, "cumulative_bonus": 20}
+{"type": "ORACLE_EXP_TABLE", "level": 2, "exp": 25, "cumulative_bonus": 45}
+{"type": "ORACLE_EXP_TABLE", "level": 3, "exp": 35, "cumulative_bonus": 80}
+{"type": "ORACLE_EXP_TABLE", "level": 4, "exp": 250, "cumulative_bonus": 630}
+{"type": "ORACLE_EXP_TABLE", "level": 5, "exp": 546, "cumulative_bonus": 1296}
+{"type": "ORACLE_SIMULATION_EXPECTATION", "scenario_id": "007", "expected_final_level": 3, "expected_final_exp": 208, "expected_total_kills": 7, "expected_min_events": 600, "expected_portal_transition": "portal_ti_to_tid1"}
