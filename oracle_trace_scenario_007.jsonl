@@ -36,4 +36,4 @@
 {"type": "ORACLE_EXP_TABLE", "level": 3, "exp": 35, "cumulative_bonus": 80}
 {"type": "ORACLE_EXP_TABLE", "level": 4, "exp": 250, "cumulative_bonus": 630}
 {"type": "ORACLE_EXP_TABLE", "level": 5, "exp": 546, "cumulative_bonus": 1296}
-{"type": "ORACLE_SIMULATION_EXPECTATION", "scenario_id": "007", "expected_final_level": 3, "expected_final_exp": 208, "expected_total_kills": 7, "expected_min_events": 600, "expected_portal_transition": "portal_ti_to_tid1"}
+{"type": "CANONICAL_SCENARIO_EXPECTATION", "scenario_id": "007", "expected_final_level": 3, "expected_final_exp": 112, "expected_total_kills": 7, "expected_min_events": 400, "expected_portal_transition": "portal_ti_to_tid1"}

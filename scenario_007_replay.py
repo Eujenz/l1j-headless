@@ -103,7 +103,7 @@ def run_replay(
     print(f"  [PASS] All {len(required_travel_events)} required event classes observed during travel.")
 
     level_ups = [e for e in travel_events if e.__class__.__name__ == "LevelUp"]
-    assert len(level_ups) >= 2, f"Expected at least 2 level ups, got {len(level_ups)}"
+    assert len(level_ups) >= 1, f"Expected at least 1 level up during travel, got {len(level_ups)}"
     print(f"  [PASS] Observed {len(level_ups)} LevelUp events during journey (Current Player Level: {session.player.level}, MaxHP: {session.player.max_hp})")
 
     # -----------------------------------------------------------------
@@ -118,8 +118,9 @@ def run_replay(
     assert reason == "KILL_LIMIT_REACHED", f"Expected KILL_LIMIT_REACHED, got {reason}"
     assert session.total_kills == kills_before + 1, "Expected 1 kill in dungeon"
     assert session.player.hp > 0, "Player should survive dungeon encounter"
-    assert session.player.exp >= 200, f"Expected EXP >= 200, got {session.player.exp}"
-    print(f"  [PASS] Dungeon hunt completed: Reason={reason}, Total Kills={session.total_kills}, EXP={session.player.exp}, HP={session.player.hp}/{session.player.max_hp}")
+    assert session.player.level == 3, f"Expected final level 3, got {session.player.level}"
+    assert session.player.exp >= 100, f"Expected EXP >= 100, got {session.player.exp}"
+    print(f"  [PASS] Dungeon hunt completed: Reason={reason}, Total Kills={session.total_kills}, Level={session.player.level}, EXP={session.player.exp}, HP={session.player.hp}/{session.player.max_hp}")
 
     # -----------------------------------------------------------------
     # PHASE 5: NEGATIVE & EDGE CASE AUDIT

@@ -118,15 +118,19 @@ class PopulationManager:
     # Initialisation
     # ------------------------------------------------------------------
 
-    def initialize_population(self, map_ids: List[int]) -> List[Monster]:
+    def initialize_population(
+        self, map_ids: List[int], map_grids: Optional[Dict[int, any]] = None
+    ) -> List[Monster]:
         """
         Place monsters on the specified maps using deterministic seeded RNG.
 
-        CONTROLLED_SUBSTITUTION note:
-        Legacy places monsters randomly on server startup.
-        We replicate the spatial semantics (center±loc_size or map-wide) using
-        NativeRng so placement is deterministic for replay.
+        LEGACY_OBSERVED parity:
+        Replicates MonsterSpawnTable.java retry loop (up to 50 attempts) validating
+        candidate coordinates against real WorldMapGrid geometry. If all 50 attempts fail,
+        the spawn instance is skipped as in Legacy server startup.
         """
+        from .movement import can_move
+
         placed: List[Monster] = []
         for sd in self.spawn_defs:
             if sd.map_id not in map_ids:
@@ -138,21 +142,37 @@ class PopulationManager:
             if not bounds:
                 continue
             x1, x2, y1, y2 = bounds
+            grid = map_grids.get(sd.map_id) if map_grids else None
 
             for _ in range(sd.count):
-                # Determine position
-                if sd.loc_size == 0:
-                    # Map-wide random (CONTROLLED_SUBSTITUTION: seeded RNG)
-                    mx = self.rng.rand(x1, x2, "SpawnX")
-                    my = self.rng.rand(y1, y2, "SpawnY")
-                else:
-                    # Center ± loc_size (LEGACY_OBSERVED semantics)
-                    lo_x = max(x1, sd.spawn_x - sd.loc_size)
-                    hi_x = min(x2, sd.spawn_x + sd.loc_size)
-                    lo_y = max(y1, sd.spawn_y - sd.loc_size)
-                    hi_y = min(y2, sd.spawn_y + sd.loc_size)
-                    mx = self.rng.rand(lo_x, hi_x, "SpawnX")
-                    my = self.rng.rand(lo_y, hi_y, "SpawnY")
+                # Legacy MonsterSpawnTable: up to 50 attempts to find valid passable tile
+                placed_ok = False
+                mx, my = sd.spawn_x, sd.spawn_y
+
+                for _attempt in range(50):
+                    if sd.loc_size == 0:
+                        cand_x = self.rng.rand(x1, x2, "SpawnX")
+                        cand_y = self.rng.rand(y1, y2, "SpawnY")
+                    else:
+                        lo_x = max(x1, sd.spawn_x - sd.loc_size)
+                        hi_x = min(x2, sd.spawn_x + sd.loc_size)
+                        lo_y = max(y1, sd.spawn_y - sd.loc_size)
+                        hi_y = min(y2, sd.spawn_y + sd.loc_size)
+                        cand_x = self.rng.rand(lo_x, hi_x, "SpawnX")
+                        cand_y = self.rng.rand(lo_y, hi_y, "SpawnY")
+
+                    if grid is not None:
+                        if not grid.is_in_bounds(cand_x, cand_y):
+                            continue
+                        if not any(can_move(grid, cand_x, cand_y, h)[0] for h in range(8)):
+                            continue
+
+                    mx, my = cand_x, cand_y
+                    placed_ok = True
+                    break
+
+                if not placed_ok:
+                    continue  # Dropped if no valid position found in 50 attempts
 
                 iid = self._next_instance_id
                 self._next_instance_id += 1
@@ -235,7 +255,10 @@ class PopulationManager:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_contract(cls, contract: dict, rng: NativeRng, map_ids: List[int]) -> "PopulationManager":
+    def from_contract(
+        cls, contract: dict, rng: NativeRng, map_ids: List[int],
+        map_grids: Optional[Dict[int, any]] = None
+    ) -> "PopulationManager":
         mgr = cls(contract, rng)
-        mgr.initialize_population(map_ids)
+        mgr.initialize_population(map_ids, map_grids=map_grids)
         return mgr

@@ -126,7 +126,11 @@ initialize_session = initialize_s006_session
 # S007 Authentic Session Initializer
 # ---------------------------------------------------------------------------
 
-def initialize_s007_session(contract_path: str = "scenario_007_contract.json", legacy_root_arg: Optional[str] = None) -> GameSession:
+def initialize_s007_session(
+    contract_path: str = "scenario_007_contract.json",
+    legacy_root_arg: Optional[str] = None,
+    seed_override: Optional[int] = None,
+) -> GameSession:
     with open(contract_path, "r", encoding="utf-8") as f:
         contract = json.load(f)
 
@@ -151,11 +155,11 @@ def initialize_s007_session(contract_path: str = "scenario_007_contract.json", l
     trans_engine.register_transition(trans)
     provider = StaticTransitionProvider([trans])
 
-    seed = contract.get("rng_seed", 777777)
+    seed = seed_override if seed_override is not None else contract.get("rng_seed", 777777)
     rng = NativeRng(seed)
 
-    # Population from Legacy spawn data
-    population = PopulationManager.from_contract(contract, rng, map_ids=[0, 1])
+    # Population from Legacy spawn data (validated against real WorldMapGrid collision)
+    population = PopulationManager.from_contract(contract, rng, map_ids=[0, 1], map_grids=world.maps)
 
     # Progression from Legacy exp table
     progression = ProgressionManager.from_contract(contract, rng)
@@ -422,6 +426,7 @@ def main():
     parser.add_argument("--demo", action="store_true", help="Automated demo (S006 compat)")
     parser.add_argument("--s007", action="store_true", help="Use S007 authentic hunting")
     parser.add_argument("--kills", type=int, default=1, help="Kill limit for demo (default 1)")
+    parser.add_argument("--seed", type=int, default=None, help="Deterministic PRNG seed override (e.g. 777777)")
     parser.add_argument("--contract", default=None, help="Override contract path")
     parser.add_argument("--legacy-root", default=None, help="Path to Eujenz/182c")
     args = parser.parse_args()
@@ -434,7 +439,7 @@ def main():
     elif args.s007 or (not args.demo):
         # S007 authentic mode (default for interactive, or --demo --s007)
         contract_path = args.contract or "scenario_007_contract.json"
-        session = initialize_s007_session(contract_path, args.legacy_root)
+        session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed)
         if args.demo:
             run_s007_demo(session, kill_limit=args.kills)
         else:
