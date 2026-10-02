@@ -19,10 +19,24 @@
 | Mechanic (機制) | Implementation (目前實作) | L1J 1.82 Evidence (原始證據) | Classification | Status |
 | :--- | :--- | :--- | :--- | :--- |
 | **Player Movement Interval** | 640 ms (Virtual Clock event gate) | `sprite_frame.sql:81, 118` (action 0/4 `walk` = 640ms), `SprTable.java:60` | `LEGACY_RULE` | **CONFIRMED** |
-| **Dynamic PC Attack Timing** | 動態解析：Player GFX + Action + Weapon（GFX 48 女騎單手劍 920ms、GFX 61 男騎單手劍 880ms、GFX 0 王子 1000ms、GFX 37 女妖 760ms） | `SprTable.java:84`, `CheckSpeed.java:89`, `sprite_frame.sql:28-118` | `LEGACY_RULE` | **CONFIRMED** (MVP-03 動態化) |
+| **Dynamic PC Attack Timing** | 動態解析：Player GFX + Action + Weapon（GFX 48 女騎單手劍 920ms、GFX 61 男騎單手劍 880ms、GFX 0 王子 1000ms、GFX 37 女妖 760ms、徒手 880/1000ms） | `SprTable.java:84`, `CheckSpeed.java:89`, `sprite_frame.sql:28-118` | `LEGACY_RULE` | **CONFIRMED** (MVP-04 擴展驗證) |
 | **Attack Damage Timing** | Immediate ($T = 0$) | `PcInstance.java:600-650`, `C_Attack.java:26`, `canonical_timing_spec.md:214` | `LEGACY_RULE` | **CONFIRMED** |
 | **Damage Formula (Physical)** | `CanonicalCombat.calculate_damage()` | `PcInstance.java:613`, `CalcStat.calcDmg()`, `C_Attack.java` | `DERIVED_CANONICAL` | **CONFIRMED** |
 | **Hit Formula (HitFigure)** | `CanonicalCombat.resolve_hit()` | `PcInstance.java:606`, `CalcStat.calcHit()` | `DERIVED_CANONICAL` | **CONFIRMED** |
+| **Potion Recovery (Red Potion)** | 紅水 (Item 104) 回復 10～30 HP (`rand(10, 30)`) | `LesserHealingPotion.java:22-26` (`MIN_HP = 10, MAX_HP = 30`) | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Potion Recovery (Orange Potion)** | 白水/澄水 (Item 105) 回復 30～70 HP (`rand(30, 70)`) | `HealingPotion.java:22-26` (`MIN_HP = 30, MAX_HP = 70`) | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Green Potion Haste Buff** | 綠水 (Item 108) 賦予 300 秒加速狀態（取消緩速、排程 VirtualClock 到期） | `HastePotion.java:21-36` (`firstTime = 300`) | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **PC Speed Multipliers** | PC Haste: $int(interval \times 0.75)$; Slow: $int(interval / 0.75)$; Brave: $int(interval \times 0.75)$ | `CheckSpeed.java:101-106` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Monster Speed Multipliers** | Monster Haste: $int(spd - spd \times 0.3)$; Slow: $int(spd + spd \times 0.3)$ | `NpcInstance.java:158-167` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Status Conflict Neutralization** | 加速取消緩速（不留加速）；緩速取消加速（不留緩速） | `HastePotion.java:30-33`, `Slow.java:43` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Offensive Skill (Energy Bolt)** | 光箭 (Skill 4): 耗魔 3 MP，施法動作 18 (880ms)，即時魔法傷害 $T=0$ | `skill_list.sql:24`, `Magic.java:164-176`, `EnergyBolt.java` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Support Skill (Lesser Heal)** | 初治 (Skill 1): 耗魔 4 MP，施法動作 19 (800ms)，即時 HP 回復 | `skill_list.sql:21`, `Magic.java:180-192`, `Heal.java` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Status Skill (Haste)** | 加速術 (Skill 28): 耗魔 25 MP / 20 HP，動作 19 (800ms)，持續 1200 秒 | `skill_list.sql:48`, `Haste.java:18-35` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Novice Death Protection** | 角色等級 $\le 9$ 時死亡不扣經驗值 (EXP Loss = 0) | `PcInstance.java:789` (`if (getLevel() > 9)`) | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **High Level Death Penalty** | 角色等級 $> 9$ 時死亡扣除當前 10% 經驗值 | `PcInstance.java:838` (`lose_exp = (int)(curExp * 0.1)`) | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Death State Cleanup** | 死亡時清除所有主動 Buff、藥水與狀態計時器 | `PcInstance.java:845-855`, `BuffTimerInstance.java` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **Player Town Respawn** | 死亡後重生地點設定於說話之島城鎮中心 (32608, 32742) | `PcInstance.java:860`, `loc.sql` (TI Town center) | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
+| **NPC Shop Interaction (Pandora)** | 說話之島潘朵拉 (NPC 3, GFX 98) 純記憶體交易：紅水 37 金幣、綠水 120 金幣 | `npc.sql:21` (潘朵拉), `npc_shop.sql:31-35` | `LEGACY_RULE` | **CONFIRMED** (MVP-04) |
 | **Autonomous Monster AI Timing** | 怪物透過 Scheduler 自主事件驅動，追擊使用 `modespeed(0)`，攻擊使用 `modespeed(1)` | `MonsterTable.java:76`, `ClientFileLoad.java:42`, `MonAi.java:85-88`, `MonsterInstance.java:293-305` | `LEGACY_RULE` | **CONFIRMED** (MVP-03 自主化) |
 | **Monster Agro & Pursuit** | 感知範圍內怪物自主鎖定目標並主動追逐 | `MonsterInstance.java:293`, `NpcInstance.java:160` | `LEGACY_RULE` | **CONFIRMED** |
 | **Monster Respawn Lifecycle** | 死亡移出地圖，`re_spawn * 1000ms` 後透過 `respawn_monster` 在合法格重生滿血 | `MonsterInstance.java:518-551`, `monster_spawnlist.sql` (`re_spawn` 欄位) | `LEGACY_RULE` | **CONFIRMED** (MVP-03 重生化) |
@@ -33,7 +47,7 @@
 | **Natural HP Regeneration Event**| 每 10 秒固定排程回血 +5 HP（非步進輪詢，為獨立世界事件） | `HpMpTimer.java:48-73` (`cha.isHpTic()`, `cha.hpTic()`) | `LEGACY_RULE` | **CONFIRMED** (MVP-03 排程化) |
 | **Drop Table Contents** | 漂浮之眼肉(166)、骷髏骨(288)、銀長劍(102)等 | `db/lineage/monster_item_drop.sql` (各怪物 monid 關聯表) | `LEGACY_RULE` | **CONFIRMED** |
 | **Drop Chance Calculation** | 機率採用萬分比 `rand(1, 10000) <= chance` | `MonsterItemDropTable.java:57` (`Util.rand(1, 10000) <= d.getChance() * Config.RATE_DROP`) | `LEGACY_RULE` | **CONFIRMED** |
-| **Drop Quantity** | `count_min` 至 `count_max` 隨機區間 | `MonsterItemDropTable.java:73` (`Util.rand(d.getCount_min(), d.getCount_max())`) | `LEGACY_RULE` | **CONFIRMED** |
+| **Drop Quantity** | `count_min` 至 `count_max` 隨機區加 | `MonsterItemDropTable.java:73` (`Util.rand(d.getCount_min(), d.getCount_max())`) | `LEGACY_RULE` | **CONFIRMED** |
 | **Ground Item Generation** | 掉落物生成於怪物座標 $(x, y)$ | `C_ItemDrop.java`, `MonsterItemDropTable.java`, `WorldInstance.java` | `LEGACY_RULE` | **CONFIRMED** |
 | **Loot (Item Pickup)** | 靠近至目標格後拾取進 Inventory | `C_ItemPickup.java:33` (`L1Object.pickup()`), `PcInstance.java` | `LEGACY_RULE` | **CONFIRMED** |
 | **Target Selection Policy** | 優先攻擊近戰目標、檢查 A* 可達性、避開高等級怪物 | Bot 自主感知與啟發式決策樹 | `BOT_POLICY` | **AGENT_SPECIFIC** |

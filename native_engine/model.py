@@ -71,8 +71,31 @@ class Actor:
     gfx_mode: int = 4
     move_speed_ms: int = 640
     attack_speed_ms: int = 920
-    next_move_at: int = 0
-    next_attack_at: int = 0
+    is_speed: bool = False
+    is_slow: bool = False
+    is_brave: bool = False
+
+    @property
+    def effective_move_speed_ms(self) -> int:
+        speed = self.move_speed_ms
+        if self.is_speed:
+            speed = int(speed * 0.75)
+        if self.is_slow:
+            speed = int(speed / 0.75)
+        if self.is_brave:
+            speed = int(speed * 0.75)
+        return max(1, speed)
+
+    @property
+    def effective_attack_speed_ms(self) -> int:
+        speed = self.attack_speed_ms
+        if self.is_speed:
+            speed = int(speed * 0.75)
+        if self.is_slow:
+            speed = int(speed / 0.75)
+        if self.is_brave:
+            speed = int(speed * 0.75)
+        return max(1, speed)
 
     @property
     def x(self) -> int:
@@ -127,6 +150,26 @@ class Monster:
     attack_speed_ms: int = 1200
     target: Optional[Any] = None
     re_spawn: int = 300
+    is_speed: bool = False
+    is_slow: bool = False
+
+    @property
+    def effective_move_speed_ms(self) -> int:
+        speed = self.move_speed_ms
+        if self.is_speed:
+            speed = int(speed - speed * 0.3)
+        if self.is_slow:
+            speed = int(speed + speed * 0.3)
+        return max(1, speed)
+
+    @property
+    def effective_attack_speed_ms(self) -> int:
+        speed = self.attack_speed_ms
+        if self.is_speed:
+            speed = int(speed - speed * 0.3)
+        if self.is_slow:
+            speed = int(speed + speed * 0.3)
+        return max(1, speed)
 
     @property
     def x(self) -> int:

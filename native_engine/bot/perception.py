@@ -36,6 +36,7 @@ class PerceptionSnapshot:
     target_monster: Optional[Monster]
     target_distance: Optional[int]    # Chebyshev distance
     is_target_in_melee: bool
+    is_speed: bool = False
 
 
 class PerceptionSystem:
@@ -108,4 +109,5 @@ class PerceptionSystem:
             target_monster=target,
             target_distance=target_dist,
             is_target_in_melee=in_melee,
+            is_speed=getattr(player, "is_speed", False),
         )

@@ -42,16 +42,24 @@ class BotActionType(Enum):
     ATTACK = auto()
     LOOT = auto()
     USE_POTION = auto()
+    CAST_SKILL = auto()
 
 
 class BotAction:
-    def __init__(self, action_type: BotActionType, target: Optional[any] = None, detail: str = ""):
+    def __init__(
+        self,
+        action_type: BotActionType,
+        target: Optional[any] = None,
+        detail: str = "",
+        skill_id: Optional[int] = None,
+    ):
         self.action_type = action_type
         self.target = target
         self.detail = detail
+        self.skill_id = skill_id
 
     def __repr__(self):
-        return f"<BotAction {self.action_type.name} target={self.target} detail='{self.detail}'>"
+        return f"<BotAction {self.action_type.name} target={self.target} skill={self.skill_id} detail='{self.detail}'>"
 
 
 class BotPolicy:
@@ -131,14 +139,25 @@ class BotPolicy:
         if snapshot.is_dead:
             return BotState.DEAD, BotAction(BotActionType.STANDBY, detail="Player is dead")
 
-        # Emergency HP check
+        # 1. HASTE MAINTENANCE: keep haste active if item/spell available
+        if not snapshot.is_speed:
+            green_pot = next((item for item in snapshot.inventory.items if item.item_id == 108 and item.count > 0), None)
+            if green_pot:
+                return BotState.RECOVER, BotAction(BotActionType.USE_POTION, target=green_pot, detail="Drinking Green Potion")
+            elif snapshot.mp >= 25 and snapshot.hp >= 30:
+                return BotState.RECOVER, BotAction(BotActionType.CAST_SKILL, target=None, detail="Casting Haste", skill_id=28)
+
+        # 2. EMERGENCY HP RECOVERY
         if snapshot.hp < (snapshot.max_hp * self.hp_recovery_threshold):
             # Check for red potion (item 104) in inventory
             red_pot = next((item for item in snapshot.inventory.items if item.item_id == 104 and item.count > 0), None)
             if red_pot:
                 return BotState.RECOVER, BotAction(BotActionType.USE_POTION, target=red_pot, detail="Drinking Red Potion")
+            # If no potion, use Lesser Heal if MP available
+            elif snapshot.mp >= 4:
+                return BotState.RECOVER, BotAction(BotActionType.CAST_SKILL, target=None, detail="Casting Lesser Heal", skill_id=1)
 
-        # 1. LOOT Priority: if there are drops directly on current tile or immediately adjacent
+        # 3. LOOT Priority: if there are drops directly on current tile or immediately adjacent
         loot_target = self.select_loot_target(snapshot)
         if loot_target:
             dist = max(abs(loot_target.pos.x - snapshot.pos.x), abs(loot_target.pos.y - snapshot.pos.y))
@@ -148,23 +167,28 @@ class BotPolicy:
                 # Move to drop position to loot
                 return BotState.LOOT, BotAction(BotActionType.MOVE_STEP, target=loot_target.pos, detail=f"Moving to loot {loot_target.item.name}")
 
-        # 2. IN_COMBAT / Target active
+        # 4. IN_COMBAT / Target active
         target = snapshot.target_monster
         if target is not None and not target.is_dead and target.hp > 0:
             if snapshot.is_target_in_melee:
+                # Weave offensive magic (Energy Bolt) if MP is plentiful
+                if snapshot.mp >= 10:
+                    return BotState.ATTACK, BotAction(BotActionType.CAST_SKILL, target=target, detail="Casting Energy Bolt", skill_id=4)
                 return BotState.ATTACK, BotAction(BotActionType.ATTACK, target=target, detail=f"Attacking {target.name}")
             else:
                 return BotState.MOVE_TO_TARGET, BotAction(BotActionType.MOVE_STEP, target=target.pos, detail=f"Approaching {target.name}")
 
-        # 3. SEARCH_TARGET: find new reachable target
+        # 5. SEARCH_TARGET: find new reachable target
         new_target = self.select_target(snapshot, map_grid=map_grid)
         if new_target:
             dist = max(abs(new_target.pos.x - snapshot.pos.x), abs(new_target.pos.y - snapshot.pos.y))
             if dist <= 1:
+                if snapshot.mp >= 10:
+                    return BotState.ATTACK, BotAction(BotActionType.CAST_SKILL, target=new_target, detail="Casting Energy Bolt", skill_id=4)
                 return BotState.ATTACK, BotAction(BotActionType.ATTACK, target=new_target, detail=f"Engaging {new_target.name}")
             else:
                 return BotState.MOVE_TO_TARGET, BotAction(BotActionType.MOVE_STEP, target=new_target.pos, detail=f"Approaching {new_target.name}")
 
-        # 4. PERSISTENT HUNTING: No targets in sight -> Roam / Patrol, NEVER TERMINATE!
+        # 6. PERSISTENT HUNTING: No targets in sight -> Roam / Patrol, NEVER TERMINATE!
         return BotState.SEARCH_TARGET, BotAction(BotActionType.ROAM, detail="Scanning & roaming for targets")
 

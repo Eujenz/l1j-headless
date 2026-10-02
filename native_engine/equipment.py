@@ -85,6 +85,8 @@ class EquipmentManager:
             ))
 
         actor.equipped_weapon = weapon
+        from .spr_action import get_pc_action_interval
+        actor.attack_speed_ms = get_pc_action_interval(actor.gfx, weapon)
         events.append(WeaponEquipped(
             tick=tick,
             actor_id=actor.id,
@@ -97,12 +99,14 @@ class EquipmentManager:
     def unequip(self, actor: "Actor", tick: int) -> Tuple[bool, str, list]:
         """Unequips current weapon (bare-hands)."""
         from .events import WeaponUnequipped
+        from .spr_action import get_pc_action_interval
 
         if actor.equipped_weapon is None:
             return False, "NO_WEAPON_EQUIPPED", []
 
         old = actor.equipped_weapon
         actor.equipped_weapon = None
+        actor.attack_speed_ms = get_pc_action_interval(actor.gfx, None)
         return True, "UNEQUIPPED", [WeaponUnequipped(
             tick=tick, actor_id=actor.id, item_id=old.item_id, name=old.name
         )]

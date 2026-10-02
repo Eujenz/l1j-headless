@@ -18,6 +18,8 @@ from ..navigation import AStarPlanner
 from ..movement import MovementEngine, can_move, HEADING_DELTA
 from ..temporal import VirtualClock, Scheduler
 from ..spr_action import get_pc_action_interval
+from ..status import StatusManager, StatusType
+from ..skill import SkillEngine
 from .perception import PerceptionSystem, PerceptionSnapshot
 from .policy import BotPolicy, BotState, BotAction, BotActionType
 from .drop import DropSystem, GroundDrop
@@ -50,6 +52,10 @@ class HeadlessBot:
         # Temporal Runtime
         self.clock = clock or VirtualClock(0)
         self.scheduler = scheduler or Scheduler(self.clock)
+
+        # Status Manager & Skill Engine
+        self.status_mgr = StatusManager(self.scheduler, self.clock)
+        self.skill_engine = SkillEngine(self.rng)
 
         # Bot subsystems
         self.perception_sys = PerceptionSystem(sight_radius=14)
@@ -85,19 +91,22 @@ class HeadlessBot:
         self._roam_heading = 0
         self._roam_steps_remaining = 0
 
-        # Recurring HP regeneration timer (10s TIC, HpMpTimer.java:48-73)
+        # Recurring HP/MP regeneration timer (10s TIC, HpMpTimer.java:48-73)
         self.scheduler.schedule_after(10000, self._hp_mp_regen_tick, name="hp_mp_regen_tick")
 
-        # Starter supplies: ensure player has basic Red Potions (item 104) for persistent hunt
+        # Starter supplies: ensure player has basic Red Potions (item 104) and Green Potions (item 108)
         if not any(item.item_id == 104 for item in self.player.inventory.items):
             starter_pot = Item(item_id=104, name="Red Potion", count=30)
             self.player.inventory.add(starter_pot)
+        if not any(item.item_id == 108 for item in self.player.inventory.items):
+            starter_green_pot = Item(item_id=108, name="Green Potion", count=10)
+            self.player.inventory.add(starter_green_pot)
 
-        self._log(f"PLAYER SPAWN: {player.name} (Lv{player.level} HP:{player.hp}/{player.max_hp}) at Map {player.map_id} ({player.x}, {player.y}) with {player.equipped_weapon.name if player.equipped_weapon else 'Bare Hands'}")
+        self._log(f"PLAYER SPAWN: {player.name} (Lv{player.level} HP:{player.hp}/{player.max_hp} MP:{player.mp}/{player.max_mp}) at Map {player.map_id} ({player.x}, {player.y}) with {player.equipped_weapon.name if player.equipped_weapon else 'Bare Hands'}")
 
     def _hp_mp_regen_tick(self) -> None:
         """
-        Natural HP regeneration TIC (HpMpTimer.java: 10s TIC).
+        Natural HP/MP regeneration TIC (HpMpTimer.java: 10s TIC).
         Recurring world event scheduled on VirtualClock.
         """
         if not self.player.is_dead:
@@ -105,6 +114,10 @@ class HeadlessBot:
                 regen = 5
                 self.player.hp = min(self.player.max_hp, self.player.hp + regen)
                 self._log(f"HP_REGEN: Player recovered {regen} HP -> HP: {self.player.hp}/{self.player.max_hp}")
+            if self.player.mp < self.player.max_mp:
+                mp_regen = 3
+                self.player.mp = min(self.player.max_mp, self.player.mp + mp_regen)
+                self._log(f"MP_REGEN: Player recovered {mp_regen} MP -> MP: {self.player.mp}/{self.player.max_mp}")
             self.scheduler.schedule_after(10000, self._hp_mp_regen_tick, name="hp_mp_regen_tick")
 
     def _log(self, message: str) -> None:
@@ -172,6 +185,9 @@ class HeadlessBot:
             potion = action.target
             self._execute_use_potion(potion)
 
+        elif action.action_type == BotActionType.CAST_SKILL:
+            self._execute_cast_skill(action)
+
         elif action.action_type == BotActionType.STANDBY:
             # Standby 200ms
             self.scheduler.schedule_after(200, self.step, name="standby_tick")
@@ -182,7 +198,7 @@ class HeadlessBot:
         """
         if self.player.pos.map_id != target_pos.map_id:
             # Cannot walk across map without transition
-            self.scheduler.schedule_after(self.move_interval_ms, self.step, name="step_tick")
+            self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="step_tick")
             return
 
         # Pathfind toward adjacent tile of target
@@ -204,7 +220,7 @@ class HeadlessBot:
             is_target_tile = (new_x == target_pos.x and new_y == target_pos.y)
             if is_target_tile and self.active_target is not None:
                 # Already in melee range
-                self.scheduler.schedule_after(self.move_interval_ms, self.step, name="step_tick")
+                self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="step_tick")
                 return
 
             can_step, _ = can_move(self._current_map_grid, self.player.x, self.player.y, chosen_heading)
@@ -233,8 +249,8 @@ class HeadlessBot:
             if not step_taken:
                 self._log(f"MOVE: Cannot navigate to ({target_pos.x}, {target_pos.y}), retrying")
 
-        # Gate action interval: 640ms PC walking
-        self.scheduler.schedule_after(self.move_interval_ms, self.step, name="move_action_gate")
+        # Gate action interval: player.effective_move_speed_ms PC walking
+        self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="move_action_gate")
 
     def _execute_attack(self, monster: Monster) -> None:
         """
@@ -305,7 +321,7 @@ class HeadlessBot:
 
             self.active_target = None
             # Schedule next step after attack interval
-            self.scheduler.schedule_after(self.attack_interval_ms, self.step, name="attack_action_gate")
+            self.scheduler.schedule_after(self.player.effective_attack_speed_ms, self.step, name="attack_action_gate")
             return
 
         # 4. Monster Agro & Autonomous Counter-Attack (Asynchronous Scheduler Event)
@@ -314,8 +330,8 @@ class HeadlessBot:
             # MonAi 30ms reaction tick
             self._schedule_monster_action(monster, delay_ms=30)
 
-        # 5. Gate player action interval: attack_interval_ms
-        self.scheduler.schedule_after(self.attack_interval_ms, self.step, name="attack_action_gate")
+        # 5. Gate player action interval: effective_attack_speed_ms
+        self.scheduler.schedule_after(self.player.effective_attack_speed_ms, self.step, name="attack_action_gate")
 
     def _schedule_monster_action(self, monster: Monster, delay_ms: int) -> None:
         """Schedule autonomous action for monster after delay_ms."""
@@ -381,11 +397,23 @@ class HeadlessBot:
             if new_p_hp == 0:
                 self.player.is_dead = True
                 self.state = BotState.DEAD
-                self._log(f"PLAYER DIED: Slain by {monster.name}")
+                # Clear buffs and potion statuses upon death (PcInstance.java:789-858)
+                self.status_mgr.clear_all(self.player)
+
+                # Novice protection check (PcInstance.java:789-858)
+                if self.player.level <= 9:
+                    self._log(f"PLAYER DIED: Slain by {monster.name}. Novice protection active (Lv{self.player.level} <= 9), 0 EXP lost.")
+                else:
+                    lost_exp = int(self.player.exp * 0.10)
+                    self.player.exp = max(0, self.player.exp - lost_exp)
+                    self._log(f"PLAYER DIED: Slain by {monster.name}. Lost {lost_exp} EXP (10%).")
+
+                # Schedule Town Respawn after 5000ms
+                self.scheduler.schedule_after(5000, self._execute_player_respawn, name="player_respawn")
                 return
 
-            # Action gate: monster.attack_speed_ms (modespeed(GfxMode + 1))
-            self._schedule_monster_action(monster, delay_ms=monster.attack_speed_ms)
+            # Action gate: monster.effective_attack_speed_ms (modespeed(GfxMode + 1) with status)
+            self._schedule_monster_action(monster, delay_ms=monster.effective_attack_speed_ms)
 
         elif dist <= 12:
             # In pursuit range: Monster Move!
@@ -409,11 +437,27 @@ class HeadlessBot:
                         step_taken = True
                         break
 
-            # Action gate: monster.move_speed_ms (modespeed(GfxMode))
-            self._schedule_monster_action(monster, delay_ms=monster.move_speed_ms)
+            # Action gate: monster.effective_move_speed_ms (modespeed(GfxMode) with status)
+            self._schedule_monster_action(monster, delay_ms=monster.effective_move_speed_ms)
         else:
             # Target lost
             monster.target = None
+
+    def _execute_player_respawn(self) -> None:
+        """
+        Respawn player at canonical Talking Island town coordinates.
+        (Talking Island town: (32608, 32742) map 0)
+        """
+        self.player.is_dead = False
+        self.player.hp = max(1, self.player.max_hp // 2)
+        self.player.map_id = 0
+        self.player.x = 32608
+        self.player.y = 32742
+        self.active_target = None
+        self.state = BotState.SEARCH_TARGET
+        self._sync_map_grid()
+        self._log(f"PLAYER RESPAWN: Revived at Town ({self.player.x}, {self.player.y}) with HP: {self.player.hp}/{self.player.max_hp}")
+        self.step()
 
     def _execute_loot(self, drop: GroundDrop) -> None:
         """
@@ -452,28 +496,145 @@ class HeadlessBot:
             self._roam_heading = (self._roam_heading + 2) % 8
             self._roam_steps_remaining = 3
 
-        # Schedule next action after 640ms walk interval
-        self.scheduler.schedule_after(self.move_interval_ms, self.step, name="roam_action_gate")
+        # Schedule next action after effective walk interval
+        self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="roam_action_gate")
 
     def _execute_use_potion(self, potion: Item) -> None:
-        """Drink potion for HP recovery."""
-        heal = self.rng.rand(15, 30, "PotionHeal")
-        old_hp = self.player.hp
-        self.player.hp = min(self.player.max_hp, self.player.hp + heal)
+        """
+        Drink potion for HP recovery or Status Buff.
+        Parity with HealingPotion.java, LesserHealingPotion.java, HastePotion.java.
+        """
+        if potion.item_id == 104:
+            # Red Potion (LesserHealingPotion.java: MIN_HP=10, MAX_HP=30)
+            heal = self.rng.rand(10, 30, "RedPotionHeal")
+            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
+            self._log(f"POTION: Drank Red Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+        elif potion.item_id == 108:
+            # Green Potion (HastePotion.java: 300s duration, applies Haste)
+            self.status_mgr.apply_haste(self.player, duration_sec=300)
+            self._log(f"POTION: Drank Green Potion -> Haste applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
+        elif potion.item_id == 105:
+            # Orange Potion (HealingPotion.java: MIN_HP=30, MAX_HP=70)
+            heal = self.rng.rand(30, 70, "OrangePotionHeal")
+            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
+            self._log(f"POTION: Drank Orange Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+        elif potion.item_id == 106:
+            # Clear Potion (HealingPotion.java: MIN_HP=70, MAX_HP=150)
+            heal = self.rng.rand(70, 150, "ClearPotionHeal")
+            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
+            self._log(f"POTION: Drank Clear Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+        else:
+            heal = self.rng.rand(10, 30, "DefaultPotionHeal")
+            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
+            self._log(f"POTION: Drank {potion.name} (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+
         potion.count -= 1
         if potion.count <= 0 and potion in self.player.inventory.items:
             self.player.inventory.items.remove(potion)
-        self._log(f"POTION: Drank {potion.name} (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+
+        # Action gate: 600ms potion cooldown
         self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
-    def run_session(self, max_kills: Optional[int] = 5, max_virtual_ms: int = 600000) -> Dict[str, Any]:
+    def _execute_cast_skill(self, action: BotAction) -> None:
+        """
+        Execute skill casting in Virtual Time.
+        Supports:
+          - Energy Bolt (Skill ID 4): Immediate damage, action 18 (880ms)
+          - Lesser Heal (Skill ID 1): Immediate HP restore, action 19 (800ms)
+          - Haste (Skill ID 28): Haste buff (1200s), action 19 (800ms)
+        """
+        skill_id = action.skill_id
+        if skill_id == 1:
+            # Lesser Heal
+            res = self.skill_engine.cast_heal(self.player, self.player)
+            if res.success:
+                self._log(f"SKILL CAST: Lesser Heal -> Restored {res.damage} HP | Player HP: {self.player.hp}/{self.player.max_hp} MP: {self.player.mp}/{self.player.max_mp}")
+            else:
+                self._log(f"SKILL FAILED: Lesser Heal failed ({res.message})")
+            self.scheduler.schedule_after(res.cast_interval_ms, self.step, name="skill_cast_gate")
+
+        elif skill_id == 4:
+            # Energy Bolt
+            target = action.target or self.active_target
+            if not target or target.is_dead:
+                self.scheduler.schedule_after(200, self.step, name="skill_cast_gate")
+                return
+
+            self.active_target = target
+            res = self.skill_engine.cast_energy_bolt(self.player, target)
+            if res.success:
+                self.total_damage_dealt += res.damage
+                self._log(f"SKILL CAST: Energy Bolt -> Hit {target.name} for {res.damage} magic dmg (IMMEDIATE) | Target HP: {target.hp}/{target.max_hp} MP: {self.player.mp}/{self.player.max_mp}")
+
+                if target.hp == 0:
+                    target.is_dead = True
+                    target.target = None
+                    self.population.despawn(target)
+                    self.kills += 1
+
+                    # Progression
+                    exp_gained = target.exp
+                    self.player.exp += exp_gained
+                    self._log(f"MONSTER DIED: {target.name} slain by magic! Granted +{exp_gained} EXP (Total EXP: {self.player.exp})")
+
+                    # Level-up Check
+                    lu = self.progression.check_level_up(self.player)
+                    if lu:
+                        old_lv, new_lv, new_max_hp = lu
+                        self._log(f"LEVEL UP: Ding! Lv{old_lv} → Lv{new_lv}! MaxHP increased to {new_max_hp}")
+
+                    # Drops
+                    drops = self.drop_system.roll_drops(target.id, target.name, target.pos, self.clock.now())
+                    for d in drops:
+                        self._log(f"GROUND DROP: {target.name} dropped {d.item.name} x{d.item.count} at ({d.pos.x}, {d.pos.y})")
+
+                    # Respawn
+                    respawn_delay_ms = (
+                        self.respawn_delay_override_ms
+                        if self.respawn_delay_override_ms is not None
+                        else max(1000, target.re_spawn * 1000)
+                    )
+                    self.scheduler.schedule_after(
+                        respawn_delay_ms,
+                        lambda m=target: self._execute_respawn(m),
+                        name=f"respawn_{target.uid}",
+                    )
+                    self.active_target = None
+                else:
+                    # Agro
+                    target.target = self.player
+                    if self.clock.now() >= self._monster_busy_until.get(target.uid, 0):
+                        self._schedule_monster_action(target, delay_ms=30)
+            else:
+                self._log(f"SKILL FAILED: Energy Bolt failed ({res.message})")
+
+            self.scheduler.schedule_after(res.cast_interval_ms, self.step, name="skill_cast_gate")
+
+        elif skill_id == 28:
+            # Haste
+            res = self.skill_engine.cast_haste(self.player, self.status_mgr)
+            if res.success:
+                self._log(f"SKILL CAST: Haste -> Haste applied for 1200s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms) | MP: {self.player.mp}/{self.player.max_mp}")
+            else:
+                self._log(f"SKILL FAILED: Haste failed ({res.message})")
+            self.scheduler.schedule_after(res.cast_interval_ms, self.step, name="skill_cast_gate")
+
+        else:
+            self.scheduler.schedule_after(600, self.step, name="skill_cast_gate")
+
+    def run_session(
+        self,
+        max_kills: Optional[int] = 5,
+        max_virtual_ms: int = 600000,
+        allow_respawn: bool = True,
+    ) -> Dict[str, Any]:
         """
         Executes persistent autonomous hunting loop in Virtual Time.
 
         Stops only when:
         1. max_kills is reached (if max_kills is not None and > 0), OR
         2. max_virtual_ms is reached, OR
-        3. player dies.
+        3. player dies (if allow_respawn is False).
         """
         # Bootstrap first step
         self.step()
@@ -481,7 +642,7 @@ class HeadlessBot:
         while (
             (max_kills is None or max_kills <= 0 or self.kills < max_kills)
             and self.clock.now() < max_virtual_ms
-            and not self.player.is_dead
+            and (allow_respawn or not self.player.is_dead)
         ):
             # Run next due event or advance to next scheduled event
             next_event = self.scheduler.peek_next()
