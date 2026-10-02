@@ -24,6 +24,7 @@ Current certified slices:
 007 Multi-Actor Persistent Native World (10-min Virtual Run)
 008 Configurable Autonomous Hunting & Town Resupply (30-min Virtual Run)
 009 Headless Player MVP Multi-Profile Verification (Closed-Loop Run)
+010 Interactive Headless Player UI & Runtime Facade (MVP-06)
 
 Legacy Reference:
 Eujenz/182c
@@ -267,14 +268,20 @@ python scenario_005_replay.py
 # Scenario 005: Differential Conformance against Legacy Oracle
 python scenario_005_differential.py
 
-# Headless Player MVP (MVP-05): Official CLI Entrypoint (default 10 mins)
+# Interactive Headless Player Desktop UI (MVP-06 Default)
 python mvp.py
 
-# Custom duration & configuration profile
-python mvp.py --config configs/conservative_hunt.json --duration 600000
+# Launch GUI with 2.0x playback speed
+python mvp.py --gui --speed 2.0
 
-# Scaled real-time playback (e.g. 5x speed)
-python mvp.py --speed 5.0
+# Headless Batch Mode (default 10 mins)
+python mvp.py --headless
+
+# Custom duration & configuration profile in Headless Batch Mode
+python mvp.py --config configs/conservative_hunt.json --duration 600000 --headless
+
+# Scaled real-time playback in batch mode (e.g. 5x speed)
+python mvp.py --speed 5.0 --duration 60000
 
 # Headless Player MVP: Run Scenario 009 Multi-Profile Verification
 python scenario_009_headless_player_mvp.py --duration 600000
@@ -286,7 +293,7 @@ python mvp.py --interactive   # Text UI interactive mode
 python mvp_replay.py
 
 # Run all test suites
-python -m unittest discover tests
+python -m unittest discover -s tests -p "test_*.py"
 ```
 
 ---
@@ -314,6 +321,7 @@ python -m unittest discover tests
 - [x] **Scenario 008**: Configurable Autonomous Hunting & Town Resupply Cycle (30-min Virtual Run)
 - [x] **Scenario 009**: Headless Player MVP Multi-Profile Verification (Closed-Loop Run)
 - [x] **MVP-05**: Layer 3 Player Operation Model & Layer 4 Configurable Helper
+- [x] **MVP-06**: Interactive Headless Player Desktop UI & Controllable Runtime Facade
 - [ ] Speed Buff Potions Runtime Action Speed Scaling (Green Potion / Bravery Potion movement & attack frames)
 - [ ] Town Warehouse Storage & Weight Economics (Doruru / Elf Warehouse)
 

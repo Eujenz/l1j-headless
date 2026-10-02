@@ -32,11 +32,11 @@ def main():
         print("============================================================")
         print("          L1J Headless - Playable MVP 啟動器")
         print("============================================================")
-        print("  [1] 進入遊戲 (真實節奏 1.0x) - [直接按 Enter 預設]")
-        print("  [2] 進入遊戲 (快速倍速 2.0x)")
-        print("  [3] 進入遊戲 (極速瞬時 Instant)")
-        print("  [4] 觀看自動演示 (Demo 模式)")
-        print("  [5] 執行全套回歸測試 (13 Tests)")
+        print("  [1] 啟動遊戲視窗 (GUI 介面, 1.0x 真實節奏) - [直接按 Enter 預設]")
+        print("  [2] 啟動遊戲視窗 (GUI 介面, 2.0x 快速節奏)")
+        print("  [3] 執行背景模擬 (Headless Batch, 極速瞬時 Instant)")
+        print("  [4] 觀看自動演示 (S007 Demo 模式)")
+        print("  [5] 執行全套回歸測試 (All Regression Tests)")
         print("  [Q] 離開")
         print("============================================================")
 
@@ -47,16 +47,16 @@ def main():
             break
 
         if choice in ("", "1"):
-            print("\n[*] 正在啟動: 真實節奏遊玩 (1.0x)...")
-            subprocess.run([sys.executable, "mvp.py", "--speed", "1.0"])
+            print("\n[*] 正在啟動: 遊戲視窗 (GUI 1.0x)...")
+            subprocess.run([sys.executable, "mvp.py", "--gui", "--speed", "1.0"])
             safe_pause()
         elif choice == "2":
-            print("\n[*] 正在啟動: 快速倍速遊玩 (2.0x)...")
-            subprocess.run([sys.executable, "mvp.py", "--speed", "2.0"])
+            print("\n[*] 正在啟動: 遊戲視窗 (GUI 2.0x)...")
+            subprocess.run([sys.executable, "mvp.py", "--gui", "--speed", "2.0"])
             safe_pause()
         elif choice == "3":
-            print("\n[*] 正在啟動: 極速瞬時遊玩 (Instant)...")
-            subprocess.run([sys.executable, "mvp.py", "--instant"])
+            print("\n[*] 正在啟動: 背景模擬 (Headless Batch Instant)...")
+            subprocess.run([sys.executable, "mvp.py", "--headless", "--instant"])
             safe_pause()
         elif choice == "4":
             print("\n[*] 正在啟動: 自動演示模式...")
@@ -64,7 +64,7 @@ def main():
             safe_pause()
         elif choice == "5":
             print("\n[*] 正在執行: 全套回歸測試...")
-            subprocess.run([sys.executable, "-m", "unittest", "tests/test_scenarios.py"])
+            subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "test_*.py"])
             safe_pause()
         elif choice == "Q":
             print("\n感謝遊玩，再見！")

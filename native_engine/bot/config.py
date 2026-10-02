@@ -366,6 +366,29 @@ class HuntingPolicy:
         return cls(destination=dest)
 
 
+# Canonical registered destinations extracted from scenario contracts & world transitions
+AVAILABLE_DESTINATIONS: Dict[str, HuntingDestination] = {
+    "ti_dungeon_1f": HuntingDestination(
+        name="Talking Island Dungeon 1F",
+        map_id=1,
+        target_x=32671,
+        target_y=32804,
+        portal_map_id=0,
+        portal_x=32477,
+        portal_y=32851,
+    ),
+    "ti_surface_field": HuntingDestination(
+        name="Talking Island Surface Field",
+        map_id=0,
+        target_x=32475,
+        target_y=32854,
+        portal_map_id=0,
+        portal_x=32475,
+        portal_y=32854,
+    ),
+}
+
+
 @dataclass
 class CharacterConfig:
     name: str = "Arthur"
@@ -538,6 +561,47 @@ class BuffRule:
 
 
 @dataclass
+class HelperModulesConfig:
+    """
+    Granular user toggles for individual automation helper modules.
+    Allows player to selectively automate or manually execute specific subsystems.
+    """
+    auto_target: bool = True
+    auto_attack: bool = True
+    auto_move: bool = True
+    auto_potion: bool = True
+    auto_buff: bool = True
+    auto_loot: bool = True
+    auto_return: bool = True
+    auto_resupply: bool = True
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "auto_target": self.auto_target,
+            "auto_attack": self.auto_attack,
+            "auto_move": self.auto_move,
+            "auto_potion": self.auto_potion,
+            "auto_buff": self.auto_buff,
+            "auto_loot": self.auto_loot,
+            "auto_return": self.auto_return,
+            "auto_resupply": self.auto_resupply,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "HelperModulesConfig":
+        return cls(
+            auto_target=bool(data.get("auto_target", True)),
+            auto_attack=bool(data.get("auto_attack", True)),
+            auto_move=bool(data.get("auto_move", True)),
+            auto_potion=bool(data.get("auto_potion", True)),
+            auto_buff=bool(data.get("auto_buff", True)),
+            auto_loot=bool(data.get("auto_loot", True)),
+            auto_return=bool(data.get("auto_return", True)),
+            auto_resupply=bool(data.get("auto_resupply", True)),
+        )
+
+
+@dataclass
 class AutonomousConfig:
     """
     Root user policy configuration.
@@ -550,6 +614,7 @@ class AutonomousConfig:
     targeting: TargetingConfig = field(default_factory=TargetingConfig)
     movement: MovementConfig = field(default_factory=MovementConfig)
     loot: LootConfig = field(default_factory=LootConfig)
+    helper_modules: HelperModulesConfig = field(default_factory=HelperModulesConfig)
     potion_rules: List[PotionRule] = field(default_factory=lambda: [
         PotionRule(enabled=True, threshold_mode=PotionThresholdMode.HP_PERCENT, threshold=30.0, item="Red Potion", item_id=104, priority=100),
         PotionRule(enabled=True, threshold_mode=PotionThresholdMode.HP_PERCENT, threshold=15.0, item="Orange Potion", item_id=103, priority=200),
@@ -576,6 +641,7 @@ class AutonomousConfig:
             "targeting": self.targeting.to_dict(),
             "movement": self.movement.to_dict(),
             "loot": self.loot.to_dict(),
+            "helper_modules": self.helper_modules.to_dict(),
             "potion_rules": [r.to_dict() for r in self.potion_rules],
             "skill_rules": [r.to_dict() for r in self.skill_rules],
             "buff_rules": [r.to_dict() for r in self.buff_rules],
@@ -596,6 +662,7 @@ class AutonomousConfig:
         targeting = TargetingConfig.from_dict(data.get("targeting", {})) if "targeting" in data else TargetingConfig()
         movement = MovementConfig.from_dict(data.get("movement", {})) if "movement" in data else MovementConfig()
         loot = LootConfig.from_dict(data.get("loot", {})) if "loot" in data else LootConfig()
+        modules = HelperModulesConfig.from_dict(data.get("helper_modules", {})) if "helper_modules" in data else HelperModulesConfig()
 
         p_rules = [PotionRule.from_dict(r) for r in data.get("potion_rules", [])] if "potion_rules" in data else [
             PotionRule(enabled=True, threshold_mode=PotionThresholdMode.HP_PERCENT, threshold=30.0, item="Red Potion", item_id=104, priority=100),
@@ -622,6 +689,7 @@ class AutonomousConfig:
             targeting=targeting,
             movement=movement,
             loot=loot,
+            helper_modules=modules,
             potion_rules=p_rules,
             skill_rules=s_rules,
             buff_rules=b_rules,

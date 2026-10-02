@@ -120,6 +120,11 @@ class PopulationManager:
         self._map_monsters: Dict[int, List[Monster]] = {}
         self._all_monsters: List[Monster] = []
 
+    @property
+    def active_monsters(self) -> List[Monster]:
+        """Return all alive placed monster instances across all maps."""
+        return [m for m in self._all_monsters if not m.is_dead]
+
     # ------------------------------------------------------------------
     # Initialisation
     # ------------------------------------------------------------------

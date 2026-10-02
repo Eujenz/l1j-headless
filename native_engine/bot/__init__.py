@@ -35,6 +35,8 @@ from .config import (
     ResupplyProfile,
     HuntingDestination,
     HuntingPolicy,
+    HelperModulesConfig,
+    AVAILABLE_DESTINATIONS,
 )
 
 __all__ = [
@@ -48,6 +50,8 @@ __all__ = [
     "DropSystem",
     "GroundDrop",
     "AutonomousConfig",
+    "HelperModulesConfig",
+    "AVAILABLE_DESTINATIONS",
     "PotionRule",
     "PotionThresholdMode",
     "EmergencyCondition",

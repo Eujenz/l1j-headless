@@ -190,28 +190,31 @@ class BotPolicy:
                     detail = f"[POLICY] HP={hp_pct:.1f}% Rule=EmergencyEscape Action=USE_ITEM Item={item.name} Reason={rule.condition.type} {rule.condition.operator} {rule.condition.value}"
                     return BotState.RETURNING_TO_TOWN, BotAction(BotActionType.USE_ITEM, target=item, detail=detail)
 
-        # 2. CONFIGURED POTION RULES EVALUATION
-        for rule in sorted([r for r in self.config.potion_rules if r.enabled], key=lambda r: r.priority, reverse=True):
-            if rule.threshold_mode == PotionThresholdMode.HP_PERCENT:
-                hp_pct = (snapshot.hp / snapshot.max_hp * 100.0) if snapshot.max_hp > 0 else 0.0
-                triggered = hp_pct <= rule.threshold
-            else:
-                triggered = snapshot.hp <= rule.threshold
+        modules = getattr(self.config, "helper_modules", None)
 
-            if triggered:
-                item = next(
-                    (i for i in snapshot.inventory.items if (i.item_id == rule.item_id or i.name == rule.item) and i.count > 0),
-                    None
-                )
-                if item:
-                    detail = f"[POLICY] HP={snapshot.hp}/{snapshot.max_hp} Rule=PotionRule Action=USE_POTION Item={item.name} Reason={rule.threshold_mode} <= {rule.threshold}"
-                    return BotState.RECOVER, BotAction(BotActionType.USE_POTION, target=item, detail=detail)
-                elif snapshot.mp >= 4:
-                    detail = f"[POLICY] Potion {rule.item} missing -> Fallback Lesser Heal"
-                    return BotState.RECOVER, BotAction(BotActionType.CAST_SKILL, target=None, detail=detail, skill_id=1)
+        # 2. CONFIGURED POTION RULES EVALUATION
+        if not modules or modules.auto_potion:
+            for rule in sorted([r for r in self.config.potion_rules if r.enabled], key=lambda r: r.priority, reverse=True):
+                if rule.threshold_mode == PotionThresholdMode.HP_PERCENT:
+                    hp_pct = (snapshot.hp / snapshot.max_hp * 100.0) if snapshot.max_hp > 0 else 0.0
+                    triggered = hp_pct <= rule.threshold
+                else:
+                    triggered = snapshot.hp <= rule.threshold
+
+                if triggered:
+                    item = next(
+                        (i for i in snapshot.inventory.items if (i.item_id == rule.item_id or i.name == rule.item) and i.count > 0),
+                        None
+                    )
+                    if item:
+                        detail = f"[POLICY] HP={snapshot.hp}/{snapshot.max_hp} Rule=PotionRule Action=USE_POTION Item={item.name} Reason={rule.threshold_mode} <= {rule.threshold}"
+                        return BotState.RECOVER, BotAction(BotActionType.USE_POTION, target=item, detail=detail)
+                    elif snapshot.mp >= 4:
+                        detail = f"[POLICY] Potion {rule.item} missing -> Fallback Lesser Heal"
+                        return BotState.RECOVER, BotAction(BotActionType.CAST_SKILL, target=None, detail=detail, skill_id=1)
 
         # 3. HASTE MAINTENANCE: keep haste active if item/spell available
-        if not snapshot.is_speed:
+        if (not modules or modules.auto_buff) and not snapshot.is_speed:
             green_pot = next((item for item in snapshot.inventory.items if item.item_id == 108 and item.count > 0), None)
             if green_pot:
                 return BotState.RECOVER, BotAction(BotActionType.USE_POTION, target=green_pot, detail="Drinking Green Potion")
@@ -225,7 +228,7 @@ class BotPolicy:
         # When in Town (Map 0), handle shop navigation, purchasing, and returning to hunt
         if snapshot.pos.map_id == 0:
             needs_resupply = False
-            if self.config.resupply.enabled and not self.resupply_attempted_this_visit:
+            if (not modules or modules.auto_resupply) and self.config.resupply.enabled and not self.resupply_attempted_this_visit:
                 for r_item in self.config.resupply.items:
                     if r_item.enabled:
                         c_count = sum(i.count for i in snapshot.inventory.items if (i.item_id == r_item.item_id or i.name == r_item.item))
@@ -259,7 +262,7 @@ class BotPolicy:
                 return BotState.TRAVELING_TO_HUNT, BotAction(BotActionType.MOVE_STEP, target=target_pos, detail="Advancing to Dungeon Hunting Grounds")
 
         # 5. RETURN TO TOWN POLICY CHECK (When out in the field)
-        if self.config.return_to_town.enabled and state not in (
+        if (not modules or modules.auto_return) and self.config.return_to_town.enabled and state not in (
             BotState.RETURNING_TO_TOWN,
             BotState.NAVIGATING_TO_SHOP,
             BotState.BUYING_SUPPLIES,
@@ -305,26 +308,31 @@ class BotPolicy:
                         return BotState.RETURNING_TO_TOWN, BotAction(BotActionType.MOVE_STEP, target=exit_portal, detail=detail + " (Walking to exit)")
 
         # 6. LOOT Priority: if there are drops directly on current tile or immediately adjacent
-        loot_target = self.select_loot_target(snapshot)
-        if loot_target:
-            dist = max(abs(loot_target.pos.x - snapshot.pos.x), abs(loot_target.pos.y - snapshot.pos.y))
-            if dist == 0:
-                return BotState.LOOT, BotAction(BotActionType.LOOT, target=loot_target, detail=f"Looting {loot_target.item.name}")
-            elif dist <= 3 and snapshot.combat_state != "IN_COMBAT":
-                # Move to drop position to loot
-                return BotState.LOOT, BotAction(BotActionType.MOVE_STEP, target=loot_target.pos, detail=f"Moving to loot {loot_target.item.name}")
+        if not modules or modules.auto_loot:
+            loot_target = self.select_loot_target(snapshot)
+            if loot_target:
+                dist = max(abs(loot_target.pos.x - snapshot.pos.x), abs(loot_target.pos.y - snapshot.pos.y))
+                if dist == 0:
+                    return BotState.LOOT, BotAction(BotActionType.LOOT, target=loot_target, detail=f"Looting {loot_target.item.name}")
+                elif dist <= 3 and snapshot.combat_state != "IN_COMBAT":
+                    if not modules or modules.auto_move:
+                        return BotState.LOOT, BotAction(BotActionType.MOVE_STEP, target=loot_target.pos, detail=f"Moving to loot {loot_target.item.name}")
 
         # Check configured Buff Rules (e.g. Haste / Green Potion)
-        for brule in getattr(self.config, "buff_rules", []):
-            if brule.enabled and brule.buff_name == "Haste" and not snapshot.is_speed:
-                green_potion = next((i for i in snapshot.inventory.items if i.item_id == 108 and i.count > 0), None)
-                if green_potion:
-                    return state, BotAction(BotActionType.USE_ITEM, target=green_potion, detail="Buff: Drink Green Potion for Haste")
+        if not modules or modules.auto_buff:
+            for brule in getattr(self.config, "buff_rules", []):
+                if brule.enabled and brule.buff_name == "Haste" and not snapshot.is_speed:
+                    green_potion = next((i for i in snapshot.inventory.items if i.item_id == 108 and i.count > 0), None)
+                    if green_potion:
+                        return state, BotAction(BotActionType.USE_ITEM, target=green_potion, detail="Buff: Drink Green Potion for Haste")
 
         # 7. IN_COMBAT / Target active
         target = snapshot.target_monster
         if target is not None and not target.is_dead and target.hp > 0:
             if snapshot.is_target_in_melee:
+                if modules and not modules.auto_attack:
+                    return BotState.IDLE, BotAction(BotActionType.STANDBY, detail="Auto-attack disabled")
+
                 # Check configured SkillRules (e.g. Energy Bolt or Lesser Heal)
                 for srule in getattr(self.config, "skill_rules", []):
                     if not srule.enabled:
@@ -344,15 +352,20 @@ class BotPolicy:
                     return BotState.ATTACK, BotAction(BotActionType.CAST_SKILL, target=target, detail="Casting Energy Bolt", skill_id=4)
                 return BotState.ATTACK, BotAction(BotActionType.ATTACK, target=target, detail=f"Attacking {target.name}")
             else:
+                if modules and not modules.auto_move:
+                    return BotState.IDLE, BotAction(BotActionType.STANDBY, detail="Auto-move disabled")
                 return BotState.MOVE_TO_TARGET, BotAction(BotActionType.MOVE_STEP, target=target.pos, detail=f"Approaching {target.name}")
 
         # 8. SEARCH_TARGET: find new reachable target
-        new_target = self.select_target(snapshot, map_grid=map_grid)
-        if new_target:
-            n_uid = getattr(new_target, "uid", getattr(new_target, "id", 0))
-            return BotState.MOVE_TO_TARGET, BotAction(BotActionType.SELECT_TARGET, target=new_target, detail=f"Target selected: {new_target.name}#{n_uid}")
+        if not modules or modules.auto_target:
+            new_target = self.select_target(snapshot, map_grid=map_grid)
+            if new_target:
+                n_uid = getattr(new_target, "uid", getattr(new_target, "id", 0))
+                return BotState.MOVE_TO_TARGET, BotAction(BotActionType.SELECT_TARGET, target=new_target, detail=f"Target selected: {new_target.name}#{n_uid}")
 
         # 9. PERSISTENT HUNTING: No targets in sight -> Roam / Patrol, NEVER TERMINATE!
+        if modules and not modules.auto_move:
+            return BotState.SEARCH_TARGET, BotAction(BotActionType.STANDBY, detail="Auto-move disabled")
         return BotState.SEARCH_TARGET, BotAction(BotActionType.ROAM, detail="Scanning & roaming for targets")
 
 

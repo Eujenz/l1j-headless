@@ -630,6 +630,8 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(description="L1J Headless Player MVP Entrypoint")
+    parser.add_argument("--gui", action="store_true", default=False, help="Launch interactive Tkinter GUI (default)")
+    parser.add_argument("--headless", "--batch", dest="headless", action="store_true", default=False, help="Run in headless batch mode")
     parser.add_argument("--demo", action="store_true", help="Automated demo (S006/S007 legacy compat)")
     parser.add_argument("--legacy-demo", action="store_true", help="Alias for --demo")
     parser.add_argument("--interactive", action="store_true", help="Interactive text UI mode (legacy compat)")
@@ -639,7 +641,7 @@ def main():
     parser.add_argument("--contract", default=None, help="Path to scenario contract JSON (default: scenario_007_contract.json)")
     parser.add_argument("--legacy-root", default=None, help="Path to Eujenz/182c")
     parser.add_argument("--config", default="configs/autonomous_default.json", help="Path to autonomous config JSON")
-    parser.add_argument("--duration", type=int, default=600000, help="Simulation duration in virtual ms (default 600000 = 10m)")
+    parser.add_argument("--duration", type=int, default=None, help="Simulation duration in virtual ms (batch mode, default 600000 = 10m)")
     parser.add_argument("--speed", type=float, default=None, help="Playback speed multiplier for real-time mode (e.g. 5.0)")
     parser.add_argument("--instant", action="store_true", default=False, help="Force instant execution (VirtualClock)")
     parser.add_argument("--verbose", action="store_true", default=True, help="Output real-time trace log")
@@ -665,17 +667,28 @@ def main():
         clock = RealTimeClock(time_scale=speed)
         session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed, clock=clock)
         run_s007_interactive(session)
-    else:
-        # Official MVP-05 Headless Player Autonomous Gameplay Entrypoint
+    elif args.headless or args.instant or (args.duration is not None and not args.gui):
+        # Official MVP-05 Headless Player Autonomous Gameplay Entrypoint (Batch / Headless Mode)
+        duration_ms = args.duration if args.duration is not None else 600000
         run_headless_player_mvp(
             config_path=args.config,
             contract_path=args.contract,
             seed=args.seed,
-            duration_ms=args.duration,
+            duration_ms=duration_ms,
             speed=args.speed,
             instant=args.instant,
             verbose=args.verbose,
             legacy_root_arg=args.legacy_root,
+        )
+    else:
+        # Official MVP-06 Interactive Headless Player GUI Client (Default)
+        from ui.player_window import main as run_player_ui
+        run_player_ui(
+            config_path=args.config,
+            contract_path=args.contract,
+            seed=args.seed,
+            speed=args.speed if args.speed is not None else 1.0,
+            legacy_root=args.legacy_root,
         )
 
 

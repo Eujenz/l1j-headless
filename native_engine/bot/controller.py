@@ -114,6 +114,8 @@ class HeadlessBot:
         # Player Operations tracking
         from collections import defaultdict
         self.operations_count: Dict[str, int] = defaultdict(int)
+        self.helper_paused: bool = False
+        self.manual_queue: List[Any] = []
 
         # Initial state: If player is away from hunting destination, start by traveling to hunt
         dest = self.config.hunting.destination
@@ -180,6 +182,32 @@ class HeadlessBot:
             self._current_map_grid = self.world_maps[self.player.map_id]
             self.movement_engine = MovementEngine(self._current_map_grid)
 
+    def pause_helper(self) -> None:
+        """Pause automation helper rules. Player can manually operate character."""
+        self.helper_paused = True
+        self.state = BotState.IDLE
+        self._log("[HELPER] Paused by player - Manual mode active")
+
+    def resume_helper(self) -> None:
+        """Resume automation helper rules."""
+        self.helper_paused = False
+        dest = self.config.hunting.destination
+        if self.player.map_id != dest.map_id or max(abs(self.player.x - dest.target_x), abs(self.player.y - dest.target_y)) > 4:
+            self.state = BotState.TRAVELING_TO_HUNT
+        else:
+            self.state = BotState.SEARCH_TARGET
+        self._log("[HELPER] Resumed by player - Automation active")
+        self.step()
+
+    def enqueue_manual_operation(self, op: Any) -> None:
+        """
+        Enqueue a manual player operation from UI.
+        Processed with highest priority on the canonical Controller pipeline.
+        """
+        self.manual_queue.append(op)
+        if self.helper_paused:
+            self.step()
+
     def step(self) -> None:
         """
         Executes one logical decision-and-action step.
@@ -206,6 +234,21 @@ class HeadlessBot:
                     m.target = self.player
                     if self.clock.now() >= self._monster_busy_until.get(m.uid, 0):
                         self._schedule_monster_action(m, delay_ms=30)
+
+        # Check manual operation queue first (highest priority for human player)
+        if self.manual_queue:
+            manual_op = self.manual_queue.pop(0)
+            op_name = getattr(manual_op, "op_type", getattr(manual_op, "action_type", None))
+            name_str = op_name.name if hasattr(op_name, "name") else str(op_name)
+            self._log(f"[MANUAL] Executing manual player operation: {name_str}")
+            self.execute_player_operation(manual_op)
+            return
+
+        # If helper is paused, do NOT generate autonomous policy actions!
+        if self.helper_paused:
+            self.state = BotState.IDLE
+            self.scheduler.schedule_after(200, self.step, name="paused_idle_tick")
+            return
 
         # 2. Policy Decision (Layer 4 Automation)
         next_state, action = self.policy.decide_next_action(
