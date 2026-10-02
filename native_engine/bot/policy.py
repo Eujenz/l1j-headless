@@ -33,48 +33,41 @@ from .config import (
 )
 
 
-class BotState(Enum):
-    IDLE = auto()
-    SEARCH_TARGET = auto()
-    MOVE_TO_TARGET = auto()
-    ATTACK = auto()
-    LOOT = auto()
-    RECOVER = auto()
-    DEAD = auto()
-    RETURNING_TO_TOWN = auto()
-    NAVIGATING_TO_SHOP = auto()
-    BUYING_SUPPLIES = auto()
-    TRAVELING_TO_HUNT = auto()
+from enum import Enum, auto
+from typing import Optional, Tuple, List, Dict, Any
+from ..model import Monster, Position
+from ..player_operation import PlayerOperationType, PlayerOperation
+from .perception import PerceptionSnapshot
+from .drop import GroundDrop
+from .config import (
+    AutonomousConfig,
+    PotionThresholdMode,
+    EmergencyConditionType,
+    EmergencyOperator,
+    ReturnTriggerType,
+    ReturnMethod,
+)
 
+BotState = Enum(
+    "BotState",
+    [
+        "IDLE",
+        "SEARCH_TARGET",
+        "MOVE_TO_TARGET",
+        "ATTACK",
+        "LOOT",
+        "RECOVER",
+        "DEAD",
+        "RETURNING_TO_TOWN",
+        "NAVIGATING_TO_SHOP",
+        "BUYING_SUPPLIES",
+        "TRAVELING_TO_HUNT",
+    ]
+)
 
-class BotActionType(Enum):
-    STANDBY = auto()
-    ROAM = auto()
-    MOVE_STEP = auto()
-    ATTACK = auto()
-    LOOT = auto()
-    USE_POTION = auto()
-    CAST_SKILL = auto()
-    USE_ITEM = auto()
-    BUY_SUPPLY = auto()
-    TRANSITION_MAP = auto()
-
-
-class BotAction:
-    def __init__(
-        self,
-        action_type: BotActionType,
-        target: Optional[any] = None,
-        detail: str = "",
-        skill_id: Optional[int] = None,
-    ):
-        self.action_type = action_type
-        self.target = target
-        self.detail = detail
-        self.skill_id = skill_id
-
-    def __repr__(self):
-        return f"<BotAction {self.action_type.name} target={self.target} skill={self.skill_id} detail='{self.detail}'>"
+# Unified Player Operation Aliases for Backward Compatibility
+BotActionType = PlayerOperationType
+BotAction = PlayerOperation
 
 
 class BotPolicy:
@@ -144,8 +137,9 @@ class BotPolicy:
             m, dist = item
             is_melee = 0 if dist <= 1 else 1
             too_high_level = 1 if (m.level > snapshot.level + 4) else 0
-            is_agro = 0 if m.agro > 0 else 1
-            return (is_melee, too_high_level, dist, is_agro, m.uid)
+            is_agro = 0 if getattr(m, "agro", 0) > 0 else 1
+            m_uid = getattr(m, "uid", getattr(m, "id", 0))
+            return (is_melee, too_high_level, dist, is_agro, m_uid)
 
         valid_candidates.sort(key=priority_key)
         return valid_candidates[0][0]
@@ -320,11 +314,32 @@ class BotPolicy:
                 # Move to drop position to loot
                 return BotState.LOOT, BotAction(BotActionType.MOVE_STEP, target=loot_target.pos, detail=f"Moving to loot {loot_target.item.name}")
 
+        # Check configured Buff Rules (e.g. Haste / Green Potion)
+        for brule in getattr(self.config, "buff_rules", []):
+            if brule.enabled and brule.buff_name == "Haste" and not snapshot.is_speed:
+                green_potion = next((i for i in snapshot.inventory.items if i.item_id == 108 and i.count > 0), None)
+                if green_potion:
+                    return state, BotAction(BotActionType.USE_ITEM, target=green_potion, detail="Buff: Drink Green Potion for Haste")
+
         # 7. IN_COMBAT / Target active
         target = snapshot.target_monster
         if target is not None and not target.is_dead and target.hp > 0:
             if snapshot.is_target_in_melee:
-                # Weave offensive magic (Energy Bolt) if MP is plentiful
+                # Check configured SkillRules (e.g. Energy Bolt or Lesser Heal)
+                for srule in getattr(self.config, "skill_rules", []):
+                    if not srule.enabled:
+                        continue
+                    if srule.condition_type == "MP_PERCENT_ABOVE":
+                        mp_pct = (snapshot.mp / snapshot.max_mp) * 100.0 if snapshot.max_mp > 0 else 0
+                        if mp_pct >= srule.threshold and snapshot.mp >= 8:
+                            s_target = target if srule.target == "CURRENT_TARGET" else None
+                            return BotState.ATTACK, BotAction(BotActionType.CAST_SKILL, target=s_target, detail=f"Casting {srule.skill}", skill_id=srule.skill_id)
+                    elif srule.condition_type == "HP_PERCENT_BELOW":
+                        hp_pct = (snapshot.hp / snapshot.max_hp) * 100.0 if snapshot.max_hp > 0 else 0
+                        if hp_pct <= srule.threshold and snapshot.mp >= 4:
+                            return BotState.ATTACK, BotAction(BotActionType.CAST_SKILL, target=None, detail=f"Casting {srule.skill}", skill_id=srule.skill_id)
+
+                # Fallback offensive magic if plentiful MP
                 if snapshot.mp >= 10:
                     return BotState.ATTACK, BotAction(BotActionType.CAST_SKILL, target=target, detail="Casting Energy Bolt", skill_id=4)
                 return BotState.ATTACK, BotAction(BotActionType.ATTACK, target=target, detail=f"Attacking {target.name}")
@@ -334,13 +349,8 @@ class BotPolicy:
         # 8. SEARCH_TARGET: find new reachable target
         new_target = self.select_target(snapshot, map_grid=map_grid)
         if new_target:
-            dist = max(abs(new_target.pos.x - snapshot.pos.x), abs(new_target.pos.y - snapshot.pos.y))
-            if dist <= 1:
-                if snapshot.mp >= 10:
-                    return BotState.ATTACK, BotAction(BotActionType.CAST_SKILL, target=new_target, detail="Casting Energy Bolt", skill_id=4)
-                return BotState.ATTACK, BotAction(BotActionType.ATTACK, target=new_target, detail=f"Engaging {new_target.name}")
-            else:
-                return BotState.MOVE_TO_TARGET, BotAction(BotActionType.MOVE_STEP, target=new_target.pos, detail=f"Approaching {new_target.name}")
+            n_uid = getattr(new_target, "uid", getattr(new_target, "id", 0))
+            return BotState.MOVE_TO_TARGET, BotAction(BotActionType.SELECT_TARGET, target=new_target, detail=f"Target selected: {new_target.name}#{n_uid}")
 
         # 9. PERSISTENT HUNTING: No targets in sight -> Roam / Patrol, NEVER TERMINATE!
         return BotState.SEARCH_TARGET, BotAction(BotActionType.ROAM, detail="Scanning & roaming for targets")

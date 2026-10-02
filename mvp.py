@@ -442,6 +442,126 @@ def run_s007_interactive(session: GameSession):
             print("未知指令")
 
 
+def run_autonomous_mvp(
+    config_path: str = "configs/autonomous_default.json",
+    seed: Optional[int] = 777777,
+    duration_ms: int = 1800000,
+    speed: float = 1.0,
+    instant: bool = True,
+    verbose: bool = True,
+    legacy_root_arg: Optional[str] = None,
+) -> None:
+    """
+    Official L1J Headless Player MVP Entrypoint.
+    Executes autonomous player driven by player-configurable automation helper.
+    """
+    from native_engine.bot import HeadlessBot, AutonomousConfig
+    from native_engine.temporal import VirtualClock, Scheduler
+    from native_engine.model import Item
+
+    print("=================================================================")
+    print("             L1J HEADLESS PLAYER MVP (L1J 1.82)                  ")
+    print("=================================================================")
+
+    # 1. Load Autonomous Configuration Profile
+    resolved_config = resolve_path(config_path)
+    if not os.path.exists(resolved_config):
+        print(f"[ERROR] Config file not found: {resolved_config}, using default AutonomousConfig()")
+        config = AutonomousConfig()
+    else:
+        config = AutonomousConfig.load_json(resolved_config)
+
+    # 2. Initialize World Session
+    contract_path = resolve_path("scenario_007_contract.json")
+    session = initialize_s007_session(contract_path, legacy_root_arg, seed_override=seed)
+
+    clock = VirtualClock(0)
+    scheduler = Scheduler(clock)
+
+    # 3. Initialize Headless Player
+    player = session.player
+    # Position player at destination or starting point
+    player.map_id = config.hunting.destination.map_id
+    player.x = config.hunting.destination.target_x
+    player.y = config.hunting.destination.target_y
+
+    def print_trace(msg: str):
+        if verbose:
+            print(f"[T={clock.now():06d}] {msg}")
+
+    bot = HeadlessBot(
+        player=player,
+        world_maps=session.world.maps,
+        population=session.population,
+        progression=session.progression,
+        clock=clock,
+        scheduler=scheduler,
+        rng=session.population.rng,
+        log_callback=print_trace,
+        config=config,
+    )
+
+    # Display Player & Automation Status
+    adena_item = next((i for i in player.inventory.items if i.item_id == 40308 or i.name == "Adena"), None)
+    adena_cnt = adena_item.count if adena_item else 0
+    weapon_name = player.equipped_weapon.name if player.equipped_weapon else "BareHand"
+
+    print("\nPLAYER")
+    print("─────────────────────────────────────────────────────────────────")
+    print(f"Name:     {player.name} (Class: Knight)")
+    print(f"Level:    Lv {player.level} (EXP: {player.exp})")
+    print(f"HP / MP:  {player.hp}/{player.max_hp} HP | {player.mp}/{player.max_mp} MP")
+    print(f"Adena:    {adena_cnt}")
+    print(f"Position: ({player.x}, {player.y}) Map {player.map_id}")
+    print(f"Weapon:   {weapon_name}")
+
+    print("\nAUTOMATION (Helper Profile)")
+    print("─────────────────────────────────────────────────────────────────")
+    print(f"Profile:         {config.name} (v{config.version})")
+    print(f"Potion Rules:    {len(config.potion_rules)} rule(s)")
+    for pr in config.potion_rules:
+        mode_str = "%" if pr.threshold_mode == "HP_PERCENT" else " HP"
+        print(f"  • {pr.item}: when HP < {pr.threshold}{mode_str} (Priority {pr.priority})")
+    print(f"Emergency Rules: {len(config.emergency_rules)} rule(s)")
+    for er in config.emergency_rules:
+        print(f"  • {er.action.item}: when HP <= {er.condition.value}% (Priority {er.priority})")
+    print(f"Return to Town:  {config.return_to_town.return_method.value} (triggers: {[t.type.value for t in config.return_to_town.triggers]})")
+    print(f"Resupply:        NPC {config.resupply.shop_npc_id} (Pandora) - {len(config.resupply.items)} target item(s)")
+    print(f"Destination:     {config.hunting.destination.name} (Map {config.hunting.destination.map_id})")
+
+    print("\nACTIVITY / TRACE MONITOR")
+    print("─────────────────────────────────────────────────────────────────")
+    import time
+    start_real = time.time()
+
+    # 4. Run Persistent Autonomous Session
+    result = bot.run_session(max_kills=None, max_virtual_ms=duration_ms, allow_respawn=True)
+
+    elapsed_real = time.time() - start_real
+    speedup = (result["virtual_time_ms"] / 1000.0) / max(0.001, elapsed_real)
+
+    # 5. Display Final Summary
+    net_adena = result["adena_earned"] - result["adena_spent"]
+    print("\n=================================================================")
+    print("                   AUTONOMOUS GAMEPLAY SUMMARY                   ")
+    print("=================================================================")
+    print(f"Simulation Result:  {result['reason']}")
+    print(f"Virtual Duration:   {result['virtual_time_ms']} ms ({result['virtual_time_ms']/60000:.1f} mins) [Elapsed: {elapsed_real:.2f}s, {speedup:.1f}x]")
+    print(f"Monsters Slain:     {result['kills']}")
+    print(f"Deaths / Respawns:  {result['respawns']}")
+    print(f"Final Level:        Lv {result['final_level']} (EXP: {result['final_exp']})")
+    print(f"Final HP / MP:      {result['final_hp']}/{result['max_hp']} HP")
+    print(f"Potions Consumed:   {result['potions_consumed']}")
+    print(f"Adena Earned:       {result['adena_earned']}")
+    print(f"Adena Spent:        {result['adena_spent']}")
+    print(f"Net Adena:          {net_adena} ({'PROFIT' if net_adena >= 0 else 'DEFICIT (LEGACY ECONOMY)'})")
+    print(f"Town Visits:        {result['town_visits']}")
+    print(f"Resupply Cycles:    {result['resupply_cycles']}")
+    print(f"Map Transitions:    {result['maps_traversed']}")
+    print(f"Looted Items:       {result['loot_picked']} items")
+    print("=================================================================")
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -451,34 +571,51 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(description="L1J Headless MVP")
-    parser.add_argument("--demo", action="store_true", help="Automated demo (S006 compat)")
-    parser.add_argument("--s007", action="store_true", help="Use S007 authentic hunting")
-    parser.add_argument("--kills", type=int, default=1, help="Kill limit for demo (default 1)")
-    parser.add_argument("--seed", type=int, default=None, help="Deterministic PRNG seed override (e.g. 777777)")
+    parser.add_argument("--demo", action="store_true", help="Automated demo (S006/S007 legacy compat)")
+    parser.add_argument("--legacy-demo", action="store_true", help="Alias for --demo")
+    parser.add_argument("--interactive", action="store_true", help="Interactive text UI mode")
+    parser.add_argument("--s007", action="store_true", help="Use S007 legacy demo")
+    parser.add_argument("--kills", type=int, default=1, help="Kill limit for legacy demo (default 1)")
+    parser.add_argument("--seed", type=int, default=777777, help="Deterministic PRNG seed override (default 777777)")
     parser.add_argument("--contract", default=None, help="Override contract path")
     parser.add_argument("--legacy-root", default=None, help="Path to Eujenz/182c")
-    parser.add_argument("--speed", type=float, default=1.0, help="Simulation speed multiplier (1.0 = true Legacy cadence, 2.0 = 2x, 0 = instant)")
-    parser.add_argument("--instant", action="store_true", help="Force instant execution (VirtualClock)")
+    parser.add_argument("--config", default="configs/autonomous_default.json", help="Path to autonomous config JSON")
+    parser.add_argument("--duration", type=int, default=1800000, help="Simulation duration in virtual ms (default 1800000 = 30m)")
+    parser.add_argument("--speed", type=float, default=1.0, help="Simulation speed multiplier")
+    parser.add_argument("--instant", action="store_true", default=True, help="Force instant execution (VirtualClock)")
+    parser.add_argument("--verbose", action="store_true", default=True, help="Output real-time trace log")
     args = parser.parse_args()
 
-    if args.demo and not args.s007:
+    is_demo = args.demo or args.legacy_demo
+
+    if is_demo and not args.s007:
         # S006 legacy demo
         contract_path = args.contract or "scenario_006_contract.json"
         session = initialize_s006_session(contract_path, args.legacy_root)
         run_s006_demo(session)
-    elif args.s007 or (not args.demo):
-        # S007 authentic mode (default for interactive, or --demo --s007)
+    elif is_demo and args.s007:
+        # S007 legacy demo
         contract_path = args.contract or "scenario_007_contract.json"
-        if args.demo or args.instant or args.speed <= 0:
-            clock = VirtualClock()
-        else:
-            clock = RealTimeClock(time_scale=args.speed)
-
+        clock = VirtualClock()
         session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed, clock=clock)
-        if args.demo:
-            run_s007_demo(session, kill_limit=args.kills)
-        else:
-            run_s007_interactive(session)
+        run_s007_demo(session, kill_limit=args.kills)
+    elif args.interactive:
+        # S007 interactive mode
+        contract_path = args.contract or "scenario_007_contract.json"
+        clock = RealTimeClock(time_scale=args.speed)
+        session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed, clock=clock)
+        run_s007_interactive(session)
+    else:
+        # Official MVP-05 Headless Player Autonomous Gameplay Entrypoint
+        run_autonomous_mvp(
+            config_path=args.config,
+            seed=args.seed,
+            duration_ms=args.duration,
+            speed=args.speed,
+            instant=args.instant,
+            verbose=args.verbose,
+            legacy_root_arg=args.legacy_root,
+        )
 
 
 if __name__ == "__main__":

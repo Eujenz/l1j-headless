@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "name": "default_knight_ti",
+  "name": "conservative_knight_ti",
   "character": {
-    "name": "Arthur",
+    "name": "Arthur_Conservative",
     "class_type": 1,
     "level": 1,
     "str": 16,
@@ -19,7 +19,7 @@
     "avoid_targets": []
   },
   "movement": {
-    "patrol_radius": 20,
+    "patrol_radius": 10,
     "search_behavior": "PATROL_CENTER"
   },
   "loot": {
@@ -36,7 +36,7 @@
     {
       "enabled": true,
       "threshold_mode": "HP_PERCENT",
-      "threshold": 70.0,
+      "threshold": 85.0,
       "item": "Red Potion",
       "item_id": 104,
       "priority": 100
@@ -44,29 +44,21 @@
     {
       "enabled": true,
       "threshold_mode": "HP_PERCENT",
-      "threshold": 35.0,
+      "threshold": 50.0,
       "item": "Orange Potion",
       "item_id": 103,
       "priority": 200
     }
   ],
   "skill_rules": [],
-  "buff_rules": [
-    {
-      "enabled": true,
-      "buff_name": "Haste",
-      "item_id": 108,
-      "skill_id": null,
-      "priority": 40
-    }
-  ],
+  "buff_rules": [],
   "emergency_rules": [
     {
       "enabled": true,
       "condition": {
         "type": "HP_PERCENT",
         "operator": "LE",
-        "value": 20.0
+        "value": 35.0
       },
       "action": {
         "type": "USE_ITEM",
@@ -86,11 +78,7 @@
         "type": "LOW_POTION",
         "item": "Red Potion",
         "item_id": 104,
-        "threshold": 3
-      },
-      {
-        "type": "BAG_WEIGHT_EXCEEDED",
-        "threshold": 82.0
+        "threshold": 6
       }
     ]
   },
@@ -102,14 +90,14 @@
         "enabled": true,
         "item": "Red Potion",
         "item_id": 104,
-        "target_quantity": 30,
+        "target_quantity": 40,
         "priority": 100
       },
       {
         "enabled": true,
         "item": "Escape Scroll",
         "item_id": 139,
-        "target_quantity": 5,
+        "target_quantity": 8,
         "priority": 60
       }
     ]

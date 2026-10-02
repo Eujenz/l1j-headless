@@ -168,6 +168,8 @@ class ReturnTriggerType(str, Enum):
     LOW_POTION = "LOW_POTION"
     LOW_RESOURCE = "LOW_RESOURCE"
     LOW_HP = "LOW_HP"
+    LOW_MP = "LOW_MP"
+    BAG_WEIGHT_EXCEEDED = "BAG_WEIGHT_EXCEEDED"
     EMERGENCY = "EMERGENCY"
     DEATH_RECOVERY = "DEATH_RECOVERY"
 
@@ -365,15 +367,192 @@ class HuntingPolicy:
 
 
 @dataclass
+class CharacterConfig:
+    name: str = "Arthur"
+    class_type: int = 1  # 1 = Knight
+    level: int = 1
+    str: int = 16
+    dex: int = 12
+    con: int = 14
+    int: int = 8
+    wis: int = 9
+    cha: int = 12
+    starting_weapon_id: int = 2
+    starting_adena: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "class_type": self.class_type,
+            "level": self.level,
+            "str": self.str,
+            "dex": self.dex,
+            "con": self.con,
+            "int": self.int,
+            "wis": self.wis,
+            "cha": self.cha,
+            "starting_weapon_id": self.starting_weapon_id,
+            "starting_adena": self.starting_adena,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CharacterConfig":
+        return cls(
+            name=str(data.get("name", "Arthur")),
+            class_type=int(data.get("class_type", 1)),
+            level=int(data.get("level", 1)),
+            str=int(data.get("str", 16)),
+            dex=int(data.get("dex", 12)),
+            con=int(data.get("con", 14)),
+            int=int(data.get("int", 8)),
+            wis=int(data.get("wis", 9)),
+            cha=int(data.get("cha", 12)),
+            starting_weapon_id=int(data.get("starting_weapon_id", 2)),
+            starting_adena=int(data.get("starting_adena", 0)),
+        )
+
+
+@dataclass
+class TargetingConfig:
+    preferred_targets: List[str] = field(default_factory=list)
+    avoid_targets: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "preferred_targets": list(self.preferred_targets),
+            "avoid_targets": list(self.avoid_targets),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "TargetingConfig":
+        return cls(
+            preferred_targets=list(data.get("preferred_targets", [])),
+            avoid_targets=list(data.get("avoid_targets", [])),
+        )
+
+
+@dataclass
+class MovementConfig:
+    patrol_radius: int = 20
+    search_behavior: str = "PATROL_CENTER"
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "patrol_radius": self.patrol_radius,
+            "search_behavior": self.search_behavior,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "MovementConfig":
+        return cls(
+            patrol_radius=int(data.get("patrol_radius", 20)),
+            search_behavior=str(data.get("search_behavior", "PATROL_CENTER")),
+        )
+
+
+@dataclass
+class LootConfig:
+    enabled: bool = True
+    pickup_priority: List[str] = field(default_factory=lambda: ["Adena", "Potion", "Scroll", "Equip"])
+    ignored_items: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "pickup_priority": list(self.pickup_priority),
+            "ignored_items": list(self.ignored_items),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LootConfig":
+        return cls(
+            enabled=data.get("enabled", True),
+            pickup_priority=list(data.get("pickup_priority", ["Adena", "Potion", "Scroll", "Equip"])),
+            ignored_items=list(data.get("ignored_items", [])),
+        )
+
+
+@dataclass
+class SkillRule:
+    enabled: bool = True
+    skill: str = "Energy Bolt"
+    skill_id: int = 4
+    condition_type: str = "MP_PERCENT_ABOVE"
+    threshold: float = 30.0
+    target: str = "CURRENT_TARGET"
+    priority: int = 50
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "skill": self.skill,
+            "skill_id": self.skill_id,
+            "condition_type": self.condition_type,
+            "threshold": self.threshold,
+            "target": self.target,
+            "priority": self.priority,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SkillRule":
+        return cls(
+            enabled=data.get("enabled", True),
+            skill=str(data.get("skill", "Energy Bolt")),
+            skill_id=int(data.get("skill_id", 4)),
+            condition_type=str(data.get("condition_type", "MP_PERCENT_ABOVE")),
+            threshold=float(data.get("threshold", 30.0)),
+            target=str(data.get("target", "CURRENT_TARGET")),
+            priority=int(data.get("priority", 50)),
+        )
+
+
+@dataclass
+class BuffRule:
+    enabled: bool = True
+    buff_name: str = "Haste"
+    item_id: Optional[int] = 108
+    skill_id: Optional[int] = None
+    priority: int = 40
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "buff_name": self.buff_name,
+            "item_id": self.item_id,
+            "skill_id": self.skill_id,
+            "priority": self.priority,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BuffRule":
+        return cls(
+            enabled=data.get("enabled", True),
+            buff_name=str(data.get("buff_name", "Haste")),
+            item_id=data.get("item_id"),
+            skill_id=data.get("skill_id"),
+            priority=int(data.get("priority", 40)),
+        )
+
+
+@dataclass
 class AutonomousConfig:
     """
     Root user policy configuration.
     Fully serializable to/from JSON.
     """
+    version: str = "1.0.0"
+    name: str = "default_knight_ti"
+    character: CharacterConfig = field(default_factory=CharacterConfig)
+    hunting: HuntingPolicy = field(default_factory=HuntingPolicy)
+    targeting: TargetingConfig = field(default_factory=TargetingConfig)
+    movement: MovementConfig = field(default_factory=MovementConfig)
+    loot: LootConfig = field(default_factory=LootConfig)
     potion_rules: List[PotionRule] = field(default_factory=lambda: [
         PotionRule(enabled=True, threshold_mode=PotionThresholdMode.HP_PERCENT, threshold=30.0, item="Red Potion", item_id=104, priority=100),
         PotionRule(enabled=True, threshold_mode=PotionThresholdMode.HP_PERCENT, threshold=15.0, item="Orange Potion", item_id=103, priority=200),
     ])
+    skill_rules: List[SkillRule] = field(default_factory=list)
+    buff_rules: List[BuffRule] = field(default_factory=list)
     emergency_rules: List[EmergencyActionRule] = field(default_factory=lambda: [
         EmergencyActionRule(
             enabled=True,
@@ -384,15 +563,22 @@ class AutonomousConfig:
     ])
     return_to_town: ReturnToTownPolicy = field(default_factory=ReturnToTownPolicy)
     resupply: ResupplyProfile = field(default_factory=ResupplyProfile)
-    hunting: HuntingPolicy = field(default_factory=HuntingPolicy)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "version": self.version,
+            "name": self.name,
+            "character": self.character.to_dict(),
+            "hunting": self.hunting.to_dict(),
+            "targeting": self.targeting.to_dict(),
+            "movement": self.movement.to_dict(),
+            "loot": self.loot.to_dict(),
             "potion_rules": [r.to_dict() for r in self.potion_rules],
+            "skill_rules": [r.to_dict() for r in self.skill_rules],
+            "buff_rules": [r.to_dict() for r in self.buff_rules],
             "emergency_rules": [r.to_dict() for r in self.emergency_rules],
             "return_to_town": self.return_to_town.to_dict(),
             "resupply": self.resupply.to_dict(),
-            "hunting": self.hunting.to_dict(),
         }
 
     def to_json(self, indent: int = 2) -> str:
@@ -400,25 +586,46 @@ class AutonomousConfig:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "AutonomousConfig":
-        p_rules = [PotionRule.from_dict(r) for r in data.get("potion_rules", [])] if "potion_rules" in data else None
-        e_rules = [EmergencyActionRule.from_dict(r) for r in data.get("emergency_rules", [])] if "emergency_rules" in data else None
-        ret = ReturnToTownPolicy.from_dict(data.get("return_to_town", {})) if "return_to_town" in data else None
-        resup = ResupplyProfile.from_dict(data.get("resupply", {})) if "resupply" in data else None
-        hunt = HuntingPolicy.from_dict(data.get("hunting", {})) if "hunting" in data else None
+        version = str(data.get("version", "1.0.0"))
+        name = str(data.get("name", "default_knight_ti"))
+        char = CharacterConfig.from_dict(data.get("character", {})) if "character" in data else CharacterConfig()
+        hunt = HuntingPolicy.from_dict(data.get("hunting", {})) if "hunting" in data else HuntingPolicy()
+        targeting = TargetingConfig.from_dict(data.get("targeting", {})) if "targeting" in data else TargetingConfig()
+        movement = MovementConfig.from_dict(data.get("movement", {})) if "movement" in data else MovementConfig()
+        loot = LootConfig.from_dict(data.get("loot", {})) if "loot" in data else LootConfig()
 
-        kwargs = {}
-        if p_rules is not None:
-            kwargs["potion_rules"] = p_rules
-        if e_rules is not None:
-            kwargs["emergency_rules"] = e_rules
-        if ret is not None:
-            kwargs["return_to_town"] = ret
-        if resup is not None:
-            kwargs["resupply"] = resup
-        if hunt is not None:
-            kwargs["hunting"] = hunt
+        p_rules = [PotionRule.from_dict(r) for r in data.get("potion_rules", [])] if "potion_rules" in data else [
+            PotionRule(enabled=True, threshold_mode=PotionThresholdMode.HP_PERCENT, threshold=30.0, item="Red Potion", item_id=104, priority=100),
+            PotionRule(enabled=True, threshold_mode=PotionThresholdMode.HP_PERCENT, threshold=15.0, item="Orange Potion", item_id=103, priority=200),
+        ]
+        s_rules = [SkillRule.from_dict(r) for r in data.get("skill_rules", [])] if "skill_rules" in data else []
+        b_rules = [BuffRule.from_dict(r) for r in data.get("buff_rules", [])] if "buff_rules" in data else []
+        e_rules = [EmergencyActionRule.from_dict(r) for r in data.get("emergency_rules", [])] if "emergency_rules" in data else [
+            EmergencyActionRule(
+                enabled=True,
+                condition=EmergencyCondition(type=EmergencyConditionType.HP_PERCENT, operator=EmergencyOperator.LE, value=10.0),
+                action=EmergencyAction(type="USE_ITEM", item="Escape Scroll", item_id=139),
+                priority=100
+            )
+        ]
+        ret = ReturnToTownPolicy.from_dict(data.get("return_to_town", {})) if "return_to_town" in data else ReturnToTownPolicy()
+        resup = ResupplyProfile.from_dict(data.get("resupply", {})) if "resupply" in data else ResupplyProfile()
 
-        return cls(**kwargs)
+        return cls(
+            version=version,
+            name=name,
+            character=char,
+            hunting=hunt,
+            targeting=targeting,
+            movement=movement,
+            loot=loot,
+            potion_rules=p_rules,
+            skill_rules=s_rules,
+            buff_rules=b_rules,
+            emergency_rules=e_rules,
+            return_to_town=ret,
+            resupply=resup,
+        )
 
     @classmethod
     def from_json(cls, json_str: str) -> "AutonomousConfig":
@@ -433,3 +640,4 @@ class AutonomousConfig:
     def load_json(cls, file_path: str) -> "AutonomousConfig":
         with open(file_path, "r", encoding="utf-8") as f:
             return cls.from_json(f.read())
+

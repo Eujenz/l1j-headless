@@ -7,12 +7,19 @@ Exports:
   - PerceptionSystem, PerceptionSnapshot: Zero-graphics perception extractor.
   - DropSystem, GroundDrop: Canonical 1.82 item drop & looting system.
 """
+from ..player_operation import PlayerOperationType, PlayerOperation
 from .controller import HeadlessBot
 from .policy import BotPolicy, BotState, BotAction, BotActionType
 from .perception import PerceptionSystem, PerceptionSnapshot
 from .drop import DropSystem, GroundDrop
 from .config import (
     AutonomousConfig,
+    CharacterConfig,
+    TargetingConfig,
+    MovementConfig,
+    LootConfig,
+    SkillRule,
+    BuffRule,
     PotionRule,
     PotionThresholdMode,
     EmergencyCondition,

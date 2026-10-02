@@ -74,6 +74,7 @@ class Actor:
     is_speed: bool = False
     is_slow: bool = False
     is_brave: bool = False
+    current_target: Optional[Any] = None
 
     @property
     def effective_move_speed_ms(self) -> int:

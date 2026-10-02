@@ -79,6 +79,12 @@ class TestCertifiedScenarios(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Scenario 008 failed:\n{res.stdout}\n{res.stderr}")
         self.assertIn("SCENARIO 008 OVERALL STATUS: PASS", res.stdout)
 
+    def test_scenario_009_headless_player_mvp(self):
+        res = subprocess.run([sys.executable, "scenario_009_headless_player_mvp.py", "--duration", "600000"], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(res.returncode, 0, f"Scenario 009 failed:\n{res.stdout}\n{res.stderr}")
+        self.assertIn("SCENARIO 009 OVERALL STATUS: PASS", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
+

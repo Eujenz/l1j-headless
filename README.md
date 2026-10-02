@@ -21,6 +21,9 @@ Current certified slices:
 004 Canonical Real Map Import
 005 Real Multi-Map Route Planning
 006 Playable MVP (Hunting / Combat / Character State)
+007 Multi-Actor Persistent Native World (10-min Virtual Run)
+008 Configurable Autonomous Hunting & Town Resupply (30-min Virtual Run)
+009 Headless Player MVP Multi-Profile Verification (Closed-Loop Run)
 
 Legacy Reference:
 Eujenz/182c
@@ -141,8 +144,25 @@ For details on the research methodology, see [Methodology Documentation](docs/me
 | **004** | Canonical Real Map Import | **Certified** | [Spec](docs/scenario_004_specification.md) |
 | **005** | Real Multi-Map Route Planning | **Certified** | [Spec](docs/scenario_005_specification.md) |
 | **006** | Playable MVP (Hunting / Combat / State) | **Certified** | [Spec](docs/scenario_006_playable_mvp_specification.md) |
+| **007** | Multi-Actor Persistent Native World | **Certified** | [Spec](docs/scenario_007_specification.md) |
+| **008** | Configurable Autonomous Hunting & Town Resupply | **Certified** | [Spec](docs/scenario_008_specification.md) |
+| **009** | Headless Player MVP Multi-Profile Verification | **Certified** | [Spec](docs/mvp/mvp_05_headless_player.md) |
 
 ### Scenario Breakdown
+
+- **Scenario 007 (Multi-Actor Persistent Native World)**:
+  - Multi-actor spatial indexing and collision
+  - Autonomous monster roaming and target chasing
+  - Natural HP regeneration and virtual temporal scheduler
+- **Scenario 008 (Autonomous Resupply Cycle)**:
+  - 30-minute persistent autonomous hunting cycle
+  - Low supply detection and Escape Scroll return to town
+  - Pandora NPC shop interaction and cross-map re-entry
+- **Scenario 009 (Headless Player MVP Multi-Profile)**:
+  - Layer 3 Player Operation execution with target acquisition gate
+  - Layer 4 Configurable Helper rule evaluations across 3 distinct profiles
+  - Verified behavioral variance and economic realism in closed loop
+
 
 - **Scenario 001 (Combat & Death)**:
   - Canonical dual-dice hit resolution (`HitFigure`)
@@ -247,17 +267,15 @@ python scenario_005_replay.py
 # Scenario 005: Differential Conformance against Legacy Oracle
 python scenario_005_differential.py
 
-# Playable MVP: Run the automated end-to-end demo
+# Headless Player MVP (MVP-05): Run autonomous simulation
+python mvp.py --duration 300000 --speed 100
+
+# Headless Player MVP: Run Scenario 009 Multi-Profile Verification
+python scenario_009_headless_player_mvp.py --duration 600000
+
+# Legacy demo and replay modes
 python mvp.py --demo
-
-# Playable MVP: Interactive text-based game session
-python mvp.py
-
-# Scenario 006: Deterministic Replay & Conformance Verification
 python mvp_replay.py
-
-# Tool: Import real map binary into canonical format
-python tools/import_real_map.py --map-id 0 --cache-dir <path_to_maps_Cache> --output map0_canonical.json
 
 # Run all test suites
 python -m unittest discover tests
@@ -286,10 +304,11 @@ python -m unittest discover tests
 - [x] **Scenario 006**: Playable MVP (Hunting / Combat / Character State)
 - [x] **Scenario 007**: Multi-Actor Persistent Native World (10-min Virtual Run)
 - [x] **Scenario 008**: Configurable Autonomous Hunting & Town Resupply Cycle (30-min Virtual Run)
-- [ ] Real Player Character Initialization (Stats, Starting Gear, Classes)
-- [ ] Real Player Equipment & Inventory Management (Equip/Unequip AC/DMG)
-- [ ] Speed Buff Potions (Green Potion 2x speed, Bravery Potion 3x speed)
+- [x] **Scenario 009**: Headless Player MVP Multi-Profile Verification (Closed-Loop Run)
+- [x] **MVP-05**: Layer 3 Player Operation Model & Layer 4 Configurable Helper
+- [ ] Speed Buff Potions Runtime Action Speed Scaling (Green Potion / Bravery Potion movement & attack frames)
 - [ ] Town Warehouse Storage & Weight Economics (Doruru / Elf Warehouse)
+
 
 ---
 

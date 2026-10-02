@@ -183,48 +183,103 @@ class HeadlessBot:
                     if self.clock.now() >= self._monster_busy_until.get(m.uid, 0):
                         self._schedule_monster_action(m, delay_ms=30)
 
-        # 2. Policy Decision
+        # 2. Policy Decision (Layer 4 Automation)
         next_state, action = self.policy.decide_next_action(
             self.state, snapshot, map_grid=self._current_map_grid
         )
         self.state = next_state
 
-        # 3. Action Execution
-        if action.action_type == BotActionType.MOVE_STEP:
-            target_pos = action.target
+        # 3. Action Execution via Player Operation (Layer 3 Player Action Model)
+        self.execute_player_operation(action)
+
+    def execute_player_operation(self, op: Any) -> None:
+        """
+        Executes a discrete PlayerOperation on the Native L1J World.
+        This is the universal execution pipeline shared by:
+          - Configurable Automation (BotPolicy)
+          - Manual Player Commands (CLI / UI / Script)
+          - Deterministic Replay / Regression Tests
+        """
+        from ..player_operation import PlayerOperationType
+
+        op_type = getattr(op, "action_type", None) or getattr(op, "op_type", None)
+
+        if op_type == PlayerOperationType.SELECT_TARGET:
+            target = op.target
+            self.player.current_target = target
+            self.active_target = target
+            if target:
+                self._log(f"[PLAYER] target={target.name}#{target.uid} (HP: {target.hp}/{target.max_hp})")
+            self.scheduler.schedule_after(50, self.step, name="select_target_gate")
+
+        elif op_type == PlayerOperationType.ATTACK:
+            monster = op.target or self.player.current_target or self.active_target
+            if monster:
+                self._execute_attack(monster)
+            else:
+                self.scheduler.schedule_after(200, self.step, name="attack_action_gate")
+
+        elif op_type == PlayerOperationType.MOVE_STEP:
+            target_pos = op.target
             self._execute_move_step(target_pos)
 
-        elif action.action_type == BotActionType.ATTACK:
-            monster = action.target
-            self._execute_attack(monster)
-
-        elif action.action_type == BotActionType.LOOT:
-            drop = action.target
+        elif op_type == PlayerOperationType.LOOT:
+            drop = op.target
             self._execute_loot(drop)
 
-        elif action.action_type == BotActionType.ROAM:
+        elif op_type == PlayerOperationType.ROAM:
             self._execute_roam()
 
-        elif action.action_type == BotActionType.USE_POTION:
-            potion = action.target
-            self._execute_use_potion(potion)
-
-        elif action.action_type == BotActionType.CAST_SKILL:
-            self._execute_cast_skill(action)
-
-        elif action.action_type == BotActionType.USE_ITEM:
-            item = action.target
+        elif op_type in (PlayerOperationType.USE_ITEM, PlayerOperationType.USE_POTION):
+            item = op.target or op.item_id
             self._execute_use_item(item)
 
-        elif action.action_type == BotActionType.BUY_SUPPLY:
-            self._execute_buy_supply(action.target)
+        elif op_type == PlayerOperationType.CAST_SKILL:
+            self._execute_cast_skill(op)
 
-        elif action.action_type == BotActionType.TRANSITION_MAP:
-            self._execute_transition_map(action.target)
+        elif op_type == PlayerOperationType.BUY_SUPPLY:
+            self._execute_buy_supply(op.target)
 
-        elif action.action_type == BotActionType.STANDBY:
-            # Standby 200ms
+        elif op_type == PlayerOperationType.TRANSITION_MAP:
+            self._execute_transition_map(op.target)
+
+        elif op_type == PlayerOperationType.EQUIP:
+            self._execute_equip(op.target)
+
+        elif op_type == PlayerOperationType.UNEQUIP:
+            self._execute_unequip(op.target)
+
+        elif op_type == PlayerOperationType.NPC_INTERACT:
+            npc = op.target
+            name = getattr(npc, "name", "NPC")
+            pos = getattr(npc, "pos", self.player.pos)
+            self._log(f"[PLAYER] NPC_INTERACT {name} at ({pos.x}, {pos.y}) Map {pos.map_id}")
+            self.scheduler.schedule_after(200, self.step, name="npc_interact_gate")
+
+        elif op_type == PlayerOperationType.RETURN_TOWN:
+            scroll = next((i for i in self.player.inventory.items if i.item_id in (139, 454) and i.count > 0), None)
+            if scroll:
+                self._execute_use_item(scroll)
+            else:
+                self._execute_transition_map(Position(32669, 32802, map_id=1))
+
+        elif op_type == PlayerOperationType.STANDBY:
             self.scheduler.schedule_after(200, self.step, name="standby_tick")
+        else:
+            # Fallback
+            self.scheduler.schedule_after(200, self.step, name="default_tick")
+
+    def _execute_equip(self, item_or_weapon: Any) -> None:
+        if isinstance(item_or_weapon, Weapon):
+            self.player.equipped_weapon = item_or_weapon
+            self._log(f"[PLAYER] EQUIP Weapon: {item_or_weapon.name}")
+        self.scheduler.schedule_after(200, self.step, name="equip_action_gate")
+
+    def _execute_unequip(self, item_or_weapon: Any) -> None:
+        old_w = self.player.equipped_weapon
+        self.player.equipped_weapon = None
+        self._log(f"[PLAYER] UNEQUIP Weapon: {old_w.name if old_w else 'None'}")
+        self.scheduler.schedule_after(200, self.step, name="unequip_action_gate")
 
     def _execute_move_step(self, target_pos: Position) -> None:
         """
@@ -292,9 +347,9 @@ class HeadlessBot:
         Canonical Damage Timing: IMMEDIATE (T = 0).
         Canonical Action Interval Gate: player.attack_speed_ms (920ms).
         """
+        self.player.current_target = monster
         self.active_target = monster
         weapon = self.player.equipped_weapon
-
         self._log(f"ATTACK TRIGGERED: Player attacks {monster.name} (HP: {monster.hp}/{monster.max_hp})")
 
         # 1. Resolve Hit via CanonicalCombat (HitFigure)
@@ -317,6 +372,7 @@ class HeadlessBot:
         self.total_damage_dealt += p_dmg
 
         self._log(f"DAMAGE RESOLVED: Player→{monster.name}: {'HIT' if is_hit else 'MISS'} for {p_dmg} dmg (IMMEDIATE) | Target HP: {new_hp}/{monster.max_hp}")
+        self._log(f"[PLAYER] ATTACK {monster.name}#{monster.uid} | {'HIT' if is_hit else 'MISS'} for {p_dmg} dmg (IMMEDIATE) | Target HP: {new_hp}/{monster.max_hp}")
 
         # 3. Monster Death Check
         if new_hp == 0:
@@ -328,18 +384,18 @@ class HeadlessBot:
             # Progression
             exp_gained = monster.exp
             self.player.exp += exp_gained
-            self._log(f"MONSTER DIED: {monster.name} slain! Granted +{exp_gained} EXP (Total EXP: {self.player.exp})")
+            self._log(f"[PLAYER] MONSTER DIED: {monster.name} slain! Granted +{exp_gained} EXP (Total EXP: {self.player.exp})")
 
             # Level-up Check
             lu = self.progression.check_level_up(self.player)
             if lu:
                 old_lv, new_lv, new_max_hp = lu
-                self._log(f"LEVEL UP: Ding! Lv{old_lv} → Lv{new_lv}! MaxHP increased to {new_max_hp}")
+                self._log(f"[PLAYER] LEVEL UP: Ding! Lv{old_lv} → Lv{new_lv}! MaxHP increased to {new_max_hp}")
 
             # Drop Generation (1.82 canonical droplist)
             drops = self.drop_system.roll_drops(monster.id, monster.name, monster.pos, self.clock.now())
             for d in drops:
-                self._log(f"GROUND DROP: {monster.name} dropped {d.item.name} x{d.item.count} at ({d.pos.x}, {d.pos.y})")
+                self._log(f"[PLAYER] GROUND DROP: {monster.name} dropped {d.item.name} x{d.item.count} at ({d.pos.x}, {d.pos.y})")
 
             # Schedule Canonical Respawn
             respawn_delay_ms = (
@@ -353,6 +409,7 @@ class HeadlessBot:
                 name=f"respawn_{monster.uid}",
             )
 
+            self.player.current_target = None
             self.active_target = None
             # Schedule next step after attack interval
             self.scheduler.schedule_after(self.player.effective_attack_speed_ms, self.step, name="attack_action_gate")
@@ -539,53 +596,79 @@ class HeadlessBot:
         # Schedule next action after effective walk interval
         self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="roam_action_gate")
 
-    def _execute_use_potion(self, potion: Item) -> None:
+    def _execute_use_potion(self, potion: Any) -> None:
         """
-        Drink potion for HP recovery or Status Buff.
-        Parity with HealingPotion.java, LesserHealingPotion.java, HastePotion.java.
+        Legacy compatibility wrapper delegating to universal _execute_use_item.
         """
-        self.potions_consumed += 1
-        if potion.item_id == 104:
-            # Red Potion (LesserHealingPotion.java: MIN_HP=10, MAX_HP=30)
+        self._execute_use_item(potion)
+
+    def _execute_use_item(self, item_or_id: Any) -> None:
+        """
+        Universal item usage executing canonical L1J 1.82 item semantics.
+        Item effects (Layer 2) are strictly governed by legacy server rules:
+          - Item 104 (Red Potion): heals 10~30 HP (LesserHealingPotion.java)
+          - Item 103/105 (Orange Potion): heals 30~70 HP (HealingPotion.java)
+          - Item 106 (Clear Potion): heals 70~150 HP (HealingPotion.java)
+          - Item 108 (Green Potion): applies Haste status for 300s (HastePotion.java)
+          - Item 110 (Bravery Potion): applies Brave status for 300s (BravePotion.java)
+          - Item 139/454 (Escape Scroll): teleports to town restart point (ScrollEscape.java)
+        """
+        if isinstance(item_or_id, Item):
+            item = item_or_id
+        elif isinstance(item_or_id, int):
+            item = next((i for i in self.player.inventory.items if i.item_id == item_or_id and i.count > 0), None)
+        else:
+            item = next((i for i in self.player.inventory.items if getattr(i, "name", "") == str(item_or_id) and i.count > 0), None)
+
+        if not item or item.count <= 0:
+            self._log(f"[PLAYER] USE_ITEM_FAILED: Item {item_or_id} not available in inventory")
+            self.scheduler.schedule_after(100, self.step, name="item_action_gate")
+            return
+
+        item_id = item.item_id
+        name = item.name
+
+        # Deduct item count from inventory
+        item.count -= 1
+        if item.count <= 0 and item in self.player.inventory.items:
+            self.player.inventory.items.remove(item)
+
+        hp_pct = int((self.player.hp / self.player.max_hp) * 100) if self.player.max_hp > 0 else 0
+
+        if item_id == 104 or "Red" in name:
             heal = self.rng.rand(10, 30, "RedPotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
-            self._log(f"POTION: Drank Red Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
-        elif potion.item_id == 108:
-            # Green Potion (HastePotion.java: 300s duration, applies Haste)
-            self.status_mgr.apply_haste(self.player, duration_sec=300)
-            self._log(f"POTION: Drank Green Potion -> Haste applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
-        elif potion.item_id in (103, 105):
-            # Orange Potion (HealingPotion.java: MIN_HP=30, MAX_HP=70)
+            self.potions_consumed += 1
+            self._log(f"[PLAYER] HP={hp_pct}% [PLAYER] USE_ITEM Red Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
+
+        elif item_id in (103, 105) or "Orange" in name:
             heal = self.rng.rand(30, 70, "OrangePotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
-            self._log(f"POTION: Drank Orange Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
-        elif potion.item_id == 106:
-            # Clear Potion (HealingPotion.java: MIN_HP=70, MAX_HP=150)
+            self.potions_consumed += 1
+            self._log(f"[PLAYER] HP={hp_pct}% [PLAYER] USE_ITEM Orange Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
+
+        elif item_id == 106 or "Clear" in name:
             heal = self.rng.rand(70, 150, "ClearPotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
-            self._log(f"POTION: Drank Clear Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
-        else:
-            heal = self.rng.rand(10, 30, "DefaultPotionHeal")
-            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
-            self._log(f"POTION: Drank {potion.name} (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self.potions_consumed += 1
+            self._log(f"[PLAYER] HP={hp_pct}% [PLAYER] USE_ITEM Clear Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
-        potion.count -= 1
-        if potion.count <= 0 and potion in self.player.inventory.items:
-            self.player.inventory.items.remove(potion)
+        elif item_id == 108 or "Green" in name:
+            self.status_mgr.apply_haste(self.player, duration_sec=300)
+            self.potions_consumed += 1
+            self._log(f"[PLAYER] USE_ITEM Green Potion -> Haste applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
+            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
-        # Action gate: 600ms potion cooldown
-        self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
+        elif item_id == 110 or "Bravery" in name:
+            self.status_mgr.apply_brave(self.player, duration_sec=300)
+            self.potions_consumed += 1
+            self._log(f"[PLAYER] USE_ITEM Bravery Potion -> Brave applied for 300s")
+            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
-    def _execute_use_item(self, item: Item) -> None:
-        """
-        Use non-potion consumable item (e.g. Escape Scroll item 139 / 454).
-        Implements canonical ScrollEscapeTemp / GetBackRestartTable behavior.
-        """
-        if item.item_id in (139, 454) or "Escape" in item.name or "回城" in item.name:
-            item.count -= 1
-            if item.count <= 0 and item in self.player.inventory.items:
-                self.player.inventory.items.remove(item)
-
+        elif item_id in (139, 454) or "Escape" in name or "回城" in name:
             self.emergency_escapes += 1
             self.town_visits += 1
             old_map = self.player.map_id
@@ -593,15 +676,20 @@ class HeadlessBot:
             self.player.map_id = 0
             self.player.x = 32599
             self.player.y = 32931
+            self.player.current_target = None
             self.active_target = None
             if old_map != 0:
                 self.maps_traversed += 1
             self._sync_map_grid()
-            self._log(f"ITEM_USE: Player used {item.name} -> Teleported to Town ({self.player.x}, {self.player.y}) Map 0")
-            self.scheduler.schedule_after(600, self.step, name="item_action_gate")
+            self._log(f"[PLAYER] USE_ITEM Escape Scroll -> Teleported to Town ({self.player.x}, {self.player.y}) Map 0")
+            self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="item_action_gate")
+
         else:
-            self._log(f"ITEM_USE: Used item {item.name}")
-            self.scheduler.schedule_after(600, self.step, name="item_action_gate")
+            heal = self.rng.rand(10, 30, "DefaultPotionHeal")
+            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
+            self.potions_consumed += 1
+            self._log(f"[PLAYER] USE_ITEM {name} (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
     def _execute_transition_map(self, portal_pos: Position) -> None:
         """
