@@ -681,7 +681,8 @@ def main():
             legacy_root_arg=args.legacy_root,
         )
     else:
-        # Official MVP-06 Interactive Headless Player GUI Client (Default)
+        # Official MVP-07 Interactive Headless Player GUI Client (Default)
+        # Startup dialog → player selects destination + profile → game window opens
         from ui.player_window import main as run_player_ui
         run_player_ui(
             config_path=args.config,
@@ -689,6 +690,7 @@ def main():
             seed=args.seed,
             speed=args.speed if args.speed is not None else 1.0,
             legacy_root=args.legacy_root,
+            show_startup=True,
         )
 
 

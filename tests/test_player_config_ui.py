@@ -3,6 +3,10 @@ tests/test_player_config_ui.py - Automated Headless Smoke & Integration Tests fo
 
 Runs Tkinter widgets headlessly (root.withdraw()) to guarantee 100% UI stability,
 widget lifecycle, config panel round-trips, and manual control dispatch.
+
+Updated for MVP-07: PlayerWindow no longer has update_ui(); instead uses
+separate polling loops (_poll_canvas, _poll_hud, _poll_log).
+Manual trigger: call _update_hud(snap) directly in tests.
 """
 import os
 import tempfile
@@ -74,35 +78,58 @@ class TestPlayerConfigUI(unittest.TestCase):
         self.assertEqual(self.runtime.bot.policy.config.potion_rules[0].threshold, 65.0)
 
     def test_04_player_window_smoke_test(self):
-        """Smoke test verifying PlayerWindow initialization, updates, and controls."""
-        win_frame = tk.Toplevel(self.root)
-        win_frame.withdraw()
+        """
+        Smoke test verifying PlayerWindow initialization, HUD update, and manual controls.
+        
+        MVP-07: update_ui() removed in favor of separate polling loops.
+        Tests now call _update_hud(snap) directly or use ViewModel methods.
+        """
+        win_root = tk.Toplevel(self.root)
+        win_root.withdraw()
 
-        app = PlayerWindow(win_frame, runtime=self.runtime)
-        app.update_ui()
+        app = PlayerWindow(win_root, runtime=self.runtime)
 
-        # Check widget texts
-        self.assertIn("Arthur", app.char_name_lbl.cget("text"))
-        self.assertIn("ACTIVE", app.helper_badge_lbl.cget("text"))
+        # Manually trigger HUD update (in tests, polling loops are not running)
+        snap = self.runtime.get_snapshot()
+        app._update_hud(snap)
 
-        # Test toggle pause
+        # Verify key labels exist and contain expected text (MVP-07 layout)
+        # title_char_lbl shows "Lv N 騎士"
+        self.assertIn("Lv", app.title_char_lbl.cget("text"))
+        # dest_lbl should show Chinese destination
+        dest_text = app.dest_lbl.cget("text")
+        self.assertTrue(len(dest_text) > 0, "Destination label should not be empty")
+
+        # Test toggle pause (helper_status_lbl)
         app._on_toggle_pause()
         self.assertTrue(self.runtime.is_helper_paused())
-        self.assertIn("PAUSED", app.helper_badge_lbl.cget("text"))
+        snap_paused = self.runtime.get_snapshot()
+        app._update_hud(snap_paused)
+        # helper_status_lbl should say "暫停"
+        status_text = app.helper_status_lbl.cget("text")
+        self.assertIn("暫停", status_text)
 
         # Test resume
         app._on_toggle_pause()
         self.assertFalse(self.runtime.is_helper_paused())
+        snap_resumed = self.runtime.get_snapshot()
+        app._update_hud(snap_resumed)
+        status_text = app.helper_status_lbl.cget("text")
+        self.assertIn("運行中", status_text)
 
         # Test manual move via D-pad
         app.vm.manual_move(0)  # North
         self.assertGreater(len(self.runtime.bot.manual_queue), 0)
 
-        # Test manual attack button
+        # Test manual attack button (should not raise)
         app._on_manual_attack()
 
         # Clean close
-        app.on_close()
+        app._canvas_active = False
+        app._hud_active = False
+        app._log_active = False
+        self.runtime.stop_background()
+        win_root.destroy()
 
 
 if __name__ == "__main__":

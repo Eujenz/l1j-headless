@@ -30,10 +30,10 @@ def main():
     while True:
         os.system("cls" if os.name == "nt" else "clear")
         print("============================================================")
-        print("          L1J Headless - Playable MVP 啟動器")
+        print("          L1J Headless 1.82 — 遊戲啟動器")
         print("============================================================")
-        print("  [1] 啟動遊戲視窗 (GUI 介面, 1.0x 真實節奏) - [直接按 Enter 預設]")
-        print("  [2] 啟動遊戲視窗 (GUI 介面, 2.0x 快速節奏)")
+        print("  [1] 啟動遊戲 (GUI 啟動畫面) - [直接按 Enter 預設]")
+        print("  [2] 啟動遊戲 (GUI 跳過啟動畫面, 直接進入)")
         print("  [3] 執行背景模擬 (Headless Batch, 極速瞬時 Instant)")
         print("  [4] 觀看自動演示 (S007 Demo 模式)")
         print("  [5] 執行全套回歸測試 (All Regression Tests)")
@@ -47,12 +47,12 @@ def main():
             break
 
         if choice in ("", "1"):
-            print("\n[*] 正在啟動: 遊戲視窗 (GUI 1.0x)...")
-            subprocess.run([sys.executable, "mvp.py", "--gui", "--speed", "1.0"])
+            print("\n[*] 正在啟動: 遊戲選擇畫面...")
+            subprocess.run([sys.executable, "mvp.py"])
             safe_pause()
         elif choice == "2":
-            print("\n[*] 正在啟動: 遊戲視窗 (GUI 2.0x)...")
-            subprocess.run([sys.executable, "mvp.py", "--gui", "--speed", "2.0"])
+            print("\n[*] 正在啟動: 遊戲視窗 (直接進入)...")
+            subprocess.run([sys.executable, "mvp.py", "--gui", "--speed", "1.0"])
             safe_pause()
         elif choice == "3":
             print("\n[*] 正在啟動: 背景模擬 (Headless Batch Instant)...")

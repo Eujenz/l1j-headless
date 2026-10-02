@@ -25,6 +25,7 @@ Current certified slices:
 008 Configurable Autonomous Hunting & Town Resupply (30-min Virtual Run)
 009 Headless Player MVP Multi-Profile Verification (Closed-Loop Run)
 010 Interactive Headless Player UI & Runtime Facade (MVP-06)
+011 Game UX, 2D World Canvas, Chinese UI & Performance (MVP-07)
 
 Legacy Reference:
 Eujenz/182c
@@ -268,13 +269,13 @@ python scenario_005_replay.py
 # Scenario 005: Differential Conformance against Legacy Oracle
 python scenario_005_differential.py
 
-# Interactive Headless Player Desktop UI (MVP-06 Default)
+# 啟動 Headless Player 桌面遊戲 (MVP-07 預設: 顯示啟動畫面)
 python mvp.py
 
-# Launch GUI with 2.0x playback speed
-python mvp.py --gui --speed 2.0
+# 直接跳過啟動畫面進入遊戲
+python mvp.py --gui --speed 1.0
 
-# Headless Batch Mode (default 10 mins)
+# 無圖形介面批次執行模式 (Headless)
 python mvp.py --headless
 
 # Custom duration & configuration profile in Headless Batch Mode
@@ -322,6 +323,7 @@ python -m unittest discover -s tests -p "test_*.py"
 - [x] **Scenario 009**: Headless Player MVP Multi-Profile Verification (Closed-Loop Run)
 - [x] **MVP-05**: Layer 3 Player Operation Model & Layer 4 Configurable Helper
 - [x] **MVP-06**: Interactive Headless Player Desktop UI & Controllable Runtime Facade
+- [x] **MVP-07**: Game UX — 2D World Canvas, Chinese UI, Performance & Playability
 - [ ] Speed Buff Potions Runtime Action Speed Scaling (Green Potion / Bravery Potion movement & attack frames)
 - [ ] Town Warehouse Storage & Weight Economics (Doruru / Elf Warehouse)
 

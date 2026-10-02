@@ -27,6 +27,10 @@ class PlayerViewModel:
         self._last_snapshot = self.runtime.get_snapshot()
         return self._last_snapshot
 
+    def get_cached_snapshot(self) -> Optional[PlayerRuntimeSnapshot]:
+        """Return last cached snapshot without requesting a new one (for canvas/log polling)."""
+        return self._last_snapshot
+
     @property
     def snapshot(self) -> PlayerRuntimeSnapshot:
         if self._last_snapshot is None:

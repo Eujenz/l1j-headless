@@ -12,11 +12,12 @@ Architecture:
   - Zero-Teleport Invariant: Characters start at authentic contract spawn positions
     and navigate via discrete physical movements and map transitions.
 """
+from collections import deque
 from dataclasses import dataclass, field
 import os
 import threading
 import time
-from typing import Dict, List, Optional, Any, Callable
+from typing import Deque, Dict, List, Optional, Any, Callable
 
 from .bot import (
     HeadlessBot,
@@ -60,7 +61,8 @@ class PlayerRuntimeSnapshot:
     hunting_destination_name: str
     helper_modules: Dict[str, bool]
     operations_count: Dict[str, int]
-    recent_logs: List[str]
+    recent_logs: List[str]          # debug trace (--debug mode)
+    game_events: List[Any]          # PlayerGameEvent list for UI activity log
     virtual_time_ms: int
     speed: float
 
@@ -111,13 +113,24 @@ class HeadlessPlayerRuntime:
         self.player: Actor = self.session.player
 
         # 4. Initialize Headless Bot Controller
-        self.trace_logs: List[str] = []
+        self.trace_logs: List[str] = []  # Debug trace (all events)
+        self._game_events: deque = deque(maxlen=500)  # Player-visible game events (bounded)
 
         def log_sink(msg: str):
             with self.lock:
+                # Debug trace (keep bounded at 500 lines)
                 self.trace_logs.append(msg)
                 if len(self.trace_logs) > 500:
                     self.trace_logs.pop(0)
+
+                # Parse player-visible game event (Chinese)
+                try:
+                    from ui.game_events import GameEventFormatter
+                    evt = GameEventFormatter.parse(msg, self.clock.now())
+                    if evt is not None:
+                        self._game_events.append(evt)
+                except Exception:
+                    pass  # Never crash the game loop due to event parsing
 
         self.bot = HeadlessBot(
             player=self.player,
@@ -139,6 +152,7 @@ class HeadlessPlayerRuntime:
         self._worker_thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._is_running = False
+
 
     # ---------------------------------------------------------------------------
     # Lifecycle & Pacing
@@ -407,6 +421,7 @@ class HeadlessPlayerRuntime:
                             "dist": d,
                         })
             nearby.sort(key=lambda item: item["dist"])
+            nearby = nearby[:20]  # Cap at 20 nearest monsters for UI performance
 
             # Active Target projection
             active_tgt_proj = None
@@ -439,13 +454,16 @@ class HeadlessPlayerRuntime:
             # Weapon name
             weapon_name = p.equipped_weapon.name if p.equipped_weapon else "Bare Hands"
 
-            # Map Name
-            map_names = {0: "Talking Island (Surface)", 1: "Talking Island Dungeon 1F", 2: "Talking Island Dungeon 2F"}
-            map_str = map_names.get(p.map_id, f"Map {p.map_id}")
+            # Map Name (Chinese for UI)
+            map_names = {0: "話島村莊", 1: "話島地監 1F", 2: "話島地監 2F"}
+            map_str = map_names.get(p.map_id, f"地圖 {p.map_id}")
 
             # Helper modules dict
             modules = getattr(self.config, "helper_modules", None)
             mod_dict = modules.to_dict() if modules else {}
+
+            # Recent game events (player-visible, Chinese)
+            recent_game_events = list(self._game_events)[-50:]
 
             return PlayerRuntimeSnapshot(
                 player_name=p.name,
@@ -473,6 +491,7 @@ class HeadlessPlayerRuntime:
                 helper_modules=mod_dict,
                 operations_count=dict(self.bot.operations_count),
                 recent_logs=list(self.trace_logs[-50:]),
+                game_events=recent_game_events,
                 virtual_time_ms=self.clock.now(),
                 speed=self.speed,
             )

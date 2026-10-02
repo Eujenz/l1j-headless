@@ -1,52 +1,118 @@
 """
-ui/player_window.py - Main Interactive Window for L1J Headless Player
+ui/player_window.py - L1J Headless Player Desktop Game Window (MVP-07)
 
-Features:
-  - Real-time Player HUD (HP/MP progress bars, EXP, Level, Adena, Position, Weapon)
-  - Helper Automation Status Badge (Active / Paused) & Real-time Speed Scaler
-  - Manual Directional Movement Pad (NW, N, NE, W, E, SW, S, SE)
-  - Manual Action Buttons (Select Target, Attack, Drink Potion, Return Town)
-  - Nearby Monsters Listbox with direct targeting & engagement
-  - Inventory Listbox with item usage
-  - Live Activity Log & Trace Monitor
-  - Embedded Config Settings Dialog
-  - Thread-safe periodic polling via root.after()
+Layout:
+  ┌────────────────────────────────────────────────────────────────┐
+  │  標題列  L1J HEADLESS 1.82                      Lv.3 騎士     │
+  ├──────────────────────────────────┬─────────────────────────────┤
+  │  世界視窗 (Canvas 2D 地圖)         │  玩家狀態面板 (HUD)          │
+  │                                  │  HP / MP / EXP / Adena      │
+  │   · · · ○ · · ·                  │  目前目標                    │
+  │   · ● · · · · ·                  │  目前狀態                    │
+  │   · · · ○ · · ·                  │  輔助模組開關                │
+  ├──────────────────────────────────┤                             │
+  │  快速操作列                        │  背包                       │
+  │  [暫停輔助] [攻擊] [喝水] [回城]   │                             │
+  │  方向鍵  WASD / ↑↓←→              │                             │
+  ├──────────────────────────────────┴─────────────────────────────┤
+  │  活動訊息 (繁體中文遊戲事件)                                      │
+  └────────────────────────────────────────────────────────────────┘
+
+Performance:
+  - World Canvas updates at ~12 FPS (every 80ms).
+  - Player HUD updates at ~7 FPS (every 150ms).
+  - Activity log: append-only, max 200 lines, never full-redraw.
+  - Monster list: diff-only update (compare UIDs before redrawing).
+  - All Tkinter widget mutations happen exclusively in main thread.
+  - NO direct gameplay mutations from UI handlers.
+
+Tkinter Thread Safety:
+  - Background worker: HeadlessPlayerRuntime (separate thread).
+  - Main thread only: all .config(), .insert(), canvas.create_*, root.after().
+  - Data transfer: PlayerRuntimeSnapshot (immutable projection, copied under lock).
 """
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
-from typing import Optional
+from tkinter import ttk, scrolledtext, messagebox, simpledialog
+from typing import Optional, List, Any
 
 from native_engine.player_runtime import HeadlessPlayerRuntime, PlayerRuntimeSnapshot
+from native_engine.bot.config import AVAILABLE_DESTINATIONS
 from .player_view_model import PlayerViewModel
 from .config_panel import ConfigPanel
+from .world_canvas import WorldCanvas, CANVAS_W, CANVAS_H
+from .game_events import (
+    BOT_STATE_ZH, ITEM_NAME_ZH, MODULE_ZH, DESTINATION_ZH,
+    zh_item, zh_state, zh_dest, zh_class, GameEventFormatter,
+)
 
+
+# ─────────────────────────── Label helpers ──────────────────────────────────
+
+def _zh_dest(dest_name: str) -> str:
+    return DESTINATION_ZH.get(dest_name, dest_name)
+
+def _zh_module(key: str) -> str:
+    return MODULE_ZH.get(key, key)
+
+def _zh_item(name: str) -> str:
+    return ITEM_NAME_ZH.get(name, name)
+
+def _zh_weapon(name: str) -> str:
+    return ITEM_NAME_ZH.get(name, name)
+
+
+# ─────────────────────────────── Main Window ────────────────────────────────
 
 class PlayerWindow:
     """
-    Main desktop window for the L1J Headless Player.
+    Main L1J Headless game window.
+    Composition:
+      - Left:   WorldCanvas 2D tile view
+      - Right:  Player HUD + helper modules + inventory
+      - Bottom: Action bar + activity log
     """
 
-    def __init__(self, root: tk.Tk, runtime: Optional[HeadlessPlayerRuntime] = None):
+    _POLL_CANVAS_MS = 80     # ~12 FPS for world view
+    _POLL_HUD_MS    = 150    # ~7 FPS for HP/MP/state
+    _POLL_LOG_MS    = 200    # ~5 FPS for activity log
+    _LOG_MAX_LINES  = 200    # max lines in activity log before trimming
+
+    def __init__(self, root: tk.Tk, runtime: HeadlessPlayerRuntime):
         self.root = root
-        self.root.title("L1J Headless 1.82 - Interactive Player Client")
-        self.root.geometry("1060x780")
-        self.root.minsize(960, 680)
+        self.runtime = runtime
+        self.vm = PlayerViewModel(runtime)
 
-        # 1. Initialize Runtime & ViewModel
-        self.runtime = runtime or HeadlessPlayerRuntime(speed=1.0)
-        self.vm = PlayerViewModel(self.runtime)
+        # State for incremental log updates
+        self._last_log_event_count = 0
+        self._last_monster_uids: List[int] = []
 
-        # 2. Build UI Layout
+        # Cached map grid for canvas rendering
+        self._map_grid_cache: dict = {}
+
+        # Setup window
+        self.root.title("L1J Headless 1.82 — Headless L1J Player")
+        self.root.geometry("1100x700")
+        self.root.minsize(900, 620)
+        self.root.configure(bg="#0f0f1a")
+
         self._build_styles()
         self._build_ui()
 
-        # 3. Setup Window Close Protocol
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.root.bind("<KeyPress>", self._on_key_press)
 
-        # 4. Start Background Simulation & Polling Loop
+        # Start background simulation
         self.runtime.start_background()
-        self._polling_active = True
-        self.root.after(100, self._poll_tick)
+
+        # Stagger the polling loops to avoid all updating at same frame
+        self._canvas_active = True
+        self._hud_active = True
+        self._log_active = True
+        self.root.after(100, self._poll_canvas)
+        self.root.after(150, self._poll_hud)
+        self.root.after(200, self._poll_log)
+
+    # ─────────────────────────── Styles ─────────────────────────────────────
 
     def _build_styles(self) -> None:
         style = ttk.Style()
@@ -54,369 +120,647 @@ class PlayerWindow:
             style.theme_use("clam")
         except Exception:
             pass
-        style.configure("Header.TLabel", font=("Helvetica", 14, "bold"))
-        style.configure("SubHeader.TLabel", font=("Helvetica", 10, "bold"))
-        style.configure("StatusActive.TLabel", font=("Helvetica", 11, "bold"), foreground="green")
-        style.configure("StatusPaused.TLabel", font=("Helvetica", 11, "bold"), foreground="darkorange")
-        style.configure("Action.TButton", font=("Helvetica", 9, "bold"))
+        # Main title
+        style.configure("Title.TLabel",
+                        font=("Helvetica", 13, "bold"), foreground="#ccccff", background="#0f0f1a")
+        style.configure("Section.TLabel",
+                        font=("Helvetica", 9, "bold"), foreground="#aaaadd", background="#15152a")
+        style.configure("Value.TLabel",
+                        font=("Consolas", 10), foreground="#e0e0ff", background="#15152a")
+        style.configure("StatusActive.TLabel",
+                        font=("Helvetica", 10, "bold"), foreground="#00dd66", background="#15152a")
+        style.configure("StatusPaused.TLabel",
+                        font=("Helvetica", 10, "bold"), foreground="#ff9900", background="#15152a")
+        style.configure("Danger.TLabel",
+                        font=("Helvetica", 10, "bold"), foreground="#ff4444", background="#15152a")
+        style.configure("Action.TButton",
+                        font=("Helvetica", 9, "bold"))
+        style.configure("Pause.TButton",
+                        font=("Helvetica", 10, "bold"))
+        # Panel frames
+        style.configure("Panel.TFrame", background="#15152a")
+        style.configure("Dark.TFrame", background="#0f0f1a")
+        style.configure("Panel.TLabelframe", background="#15152a")
+        style.configure("Panel.TLabelframe.Label", background="#15152a", foreground="#aaaadd",
+                        font=("Helvetica", 9, "bold"))
+
+    # ─────────────────────────── UI Build ────────────────────────────────────
 
     def _build_ui(self) -> None:
-        main_frame = ttk.Frame(self.root, padding=8)
-        main_frame.pack(fill=tk.BOTH, expand=True)
+        # Main container
+        main = ttk.Frame(self.root, style="Dark.TFrame", padding=4)
+        main.pack(fill=tk.BOTH, expand=True)
 
-        # -----------------------------------------------------------------------
-        # TOP: Player Status & Control HUD
-        # -----------------------------------------------------------------------
-        top_hud = ttk.LabelFrame(main_frame, text="角色狀態 (Player HUD)", padding=8)
-        top_hud.pack(fill=tk.X, pady=(0, 6))
+        # ── Title bar ────────────────────────────────────────────────────────
+        title_bar = ttk.Frame(main, style="Dark.TFrame")
+        title_bar.pack(fill=tk.X, pady=(0, 4))
 
-        # Row 0: Character details
-        info_frame = ttk.Frame(top_hud)
-        info_frame.pack(fill=tk.X)
+        ttk.Label(title_bar, text="⚔  L1J HEADLESS 1.82",
+                  style="Title.TLabel").pack(side=tk.LEFT, padx=4)
 
-        self.char_name_lbl = ttk.Label(info_frame, text="Arthur (Knight)", style="Header.TLabel")
-        self.char_name_lbl.pack(side=tk.LEFT, padx=5)
-
-        self.level_lbl = ttk.Label(info_frame, text="Lv 1 (0 EXP)", font=("Helvetica", 10, "bold"))
-        self.level_lbl.pack(side=tk.LEFT, padx=10)
-
-        self.location_lbl = ttk.Label(info_frame, text="話島村莊 (32477, 32875)", font=("Helvetica", 10))
-        self.location_lbl.pack(side=tk.LEFT, padx=10)
-
-        self.adena_lbl = ttk.Label(info_frame, text="1,000 Adena", font=("Helvetica", 10, "bold"), foreground="goldenrod")
-        self.adena_lbl.pack(side=tk.LEFT, padx=10)
-
-        self.weapon_lbl = ttk.Label(info_frame, text="武器: Long Sword", font=("Helvetica", 10))
-        self.weapon_lbl.pack(side=tk.LEFT, padx=10)
-
-        # Right side: Speed and Config button
-        ctrl_frame = ttk.Frame(info_frame)
-        ctrl_frame.pack(side=tk.RIGHT)
-
-        ttk.Label(ctrl_frame, text="節奏速度:").pack(side=tk.LEFT, padx=2)
+        # Speed selector
+        ttk.Label(title_bar, text="節奏：", foreground="#888888",
+                  background="#0f0f1a", font=("Helvetica", 9)).pack(side=tk.RIGHT, padx=(0, 2))
         self.speed_var = tk.StringVar(value="1.0x")
-        self.speed_combo = ttk.Combobox(
-            ctrl_frame,
-            textvariable=self.speed_var,
-            values=["0.5x", "1.0x", "2.0x", "5.0x", "10.0x", "極速 Instant"],
-            state="readonly",
-            width=12,
-        )
-        self.speed_combo.pack(side=tk.LEFT, padx=4)
-        self.speed_combo.bind("<<ComboboxSelected>>", self._on_speed_changed)
+        speed_cb = ttk.Combobox(title_bar, textvariable=self.speed_var,
+                                values=["0.5x", "1.0x", "2.0x", "5.0x", "10.0x", "極速"],
+                                state="readonly", width=9)
+        speed_cb.pack(side=tk.RIGHT, padx=4)
+        speed_cb.bind("<<ComboboxSelected>>", self._on_speed_changed)
 
-        cfg_btn = ttk.Button(ctrl_frame, text="⚙ Helper 設定", command=self.open_config_dialog)
-        cfg_btn.pack(side=tk.LEFT, padx=4)
+        # Char info (top right)
+        self.title_char_lbl = ttk.Label(title_bar, text="Lv 1 騎士",
+                                        font=("Helvetica", 10, "bold"),
+                                        foreground="#ccccff", background="#0f0f1a")
+        self.title_char_lbl.pack(side=tk.RIGHT, padx=12)
 
-        # Row 1: HP & MP Bars & Helper Status Badge
-        bars_frame = ttk.Frame(top_hud, padding=(0, 4, 0, 0))
-        bars_frame.pack(fill=tk.X)
+        # ── Middle area: Canvas + Right Panel ────────────────────────────────
+        mid = ttk.Frame(main, style="Dark.TFrame")
+        mid.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
 
-        # HP Bar
-        ttk.Label(bars_frame, text="HP:", font=("Helvetica", 9, "bold")).pack(side=tk.LEFT, padx=(5, 2))
-        self.hp_bar = ttk.Progressbar(bars_frame, length=180, maximum=100)
-        self.hp_bar.pack(side=tk.LEFT, padx=(0, 5))
-        self.hp_text_lbl = ttk.Label(bars_frame, text="100 / 100", width=12)
+        # Left: 2D World Canvas
+        left = ttk.Frame(mid, style="Panel.TFrame", padding=2)
+        left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.world_canvas = WorldCanvas(left)
+        self.world_canvas.pack(fill=tk.BOTH, expand=True)
+
+        # Right panel
+        right = ttk.Frame(mid, style="Panel.TFrame", width=280, padding=6)
+        right.pack(side=tk.RIGHT, fill=tk.Y)
+        right.pack_propagate(False)
+
+        self._build_right_panel(right)
+
+        # ── Bottom: Action bar + Log ─────────────────────────────────────────
+        bottom = ttk.Frame(main, style="Dark.TFrame")
+        bottom.pack(fill=tk.X)
+
+        self._build_action_bar(bottom)
+        self._build_activity_log(bottom)
+
+    def _build_right_panel(self, parent) -> None:
+        """Build the right status panel: HP/MP, target, state, helper, inventory."""
+
+        # ─ Character HUD ─────────────────────────────────────────────────────
+        hud = ttk.LabelFrame(parent, text="玩家", style="Panel.TLabelframe", padding=6)
+        hud.pack(fill=tk.X, pady=(0, 6))
+
+        # HP
+        hp_row = ttk.Frame(hud, style="Panel.TFrame")
+        hp_row.pack(fill=tk.X, pady=2)
+        ttk.Label(hp_row, text="HP", width=4, style="Section.TLabel").pack(side=tk.LEFT)
+        self.hp_canvas = tk.Canvas(hp_row, height=14, bg="#220000", highlightthickness=0)
+        self.hp_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.hp_text_lbl = ttk.Label(hp_row, text="100/100", width=9, style="Value.TLabel")
         self.hp_text_lbl.pack(side=tk.LEFT)
 
-        # MP Bar
-        ttk.Label(bars_frame, text="MP:", font=("Helvetica", 9, "bold")).pack(side=tk.LEFT, padx=(10, 2))
-        self.mp_bar = ttk.Progressbar(bars_frame, length=120, maximum=100)
-        self.mp_bar.pack(side=tk.LEFT, padx=(0, 5))
-        self.mp_text_lbl = ttk.Label(bars_frame, text="10 / 10", width=10)
+        # MP
+        mp_row = ttk.Frame(hud, style="Panel.TFrame")
+        mp_row.pack(fill=tk.X, pady=2)
+        ttk.Label(mp_row, text="MP", width=4, style="Section.TLabel").pack(side=tk.LEFT)
+        self.mp_canvas = tk.Canvas(mp_row, height=10, bg="#002222", highlightthickness=0)
+        self.mp_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.mp_text_lbl = ttk.Label(mp_row, text="10/10", width=9, style="Value.TLabel")
         self.mp_text_lbl.pack(side=tk.LEFT)
 
-        # Helper Status Badge
-        self.helper_badge_lbl = ttk.Label(bars_frame, text="● HELPER ACTIVE", style="StatusActive.TLabel")
-        self.helper_badge_lbl.pack(side=tk.RIGHT, padx=10)
+        # EXP
+        exp_row = ttk.Frame(hud, style="Panel.TFrame")
+        exp_row.pack(fill=tk.X, pady=2)
+        ttk.Label(exp_row, text="EXP", width=4, style="Section.TLabel").pack(side=tk.LEFT)
+        self.exp_lbl = ttk.Label(exp_row, text="0", style="Value.TLabel")
+        self.exp_lbl.pack(side=tk.LEFT, padx=4)
+        self.adena_lbl = ttk.Label(exp_row, text="金幣: 0", style="Value.TLabel", foreground="#ffd700")
+        self.adena_lbl.pack(side=tk.RIGHT)
 
-        # -----------------------------------------------------------------------
-        # MIDDLE: Paned Window (Left: Monsters/Inventory, Center: D-Pad, Right: Logs)
-        # -----------------------------------------------------------------------
-        paned = ttk.PanedWindow(main_frame, orient=tk.HORIZONTAL)
-        paned.pack(fill=tk.BOTH, expand=True, pady=4)
+        # Location
+        self.loc_lbl = ttk.Label(hud, text="話島村莊", style="Value.TLabel", foreground="#aaaaaa")
+        self.loc_lbl.pack(anchor=tk.W)
 
-        # --- LEFT PANEL: Nearby Monsters & Inventory ---
-        left_panel = ttk.Frame(paned, width=320, padding=4)
-        paned.add(left_panel, weight=1)
+        # Weapon
+        self.weapon_lbl = ttk.Label(hud, text="武器：長劍", style="Value.TLabel")
+        self.weapon_lbl.pack(anchor=tk.W)
 
-        # Nearby Monsters
-        mon_group = ttk.LabelFrame(left_panel, text="感知範圍怪物 (Nearby Monsters)", padding=6)
-        mon_group.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
+        # ─ Current Target ────────────────────────────────────────────────────
+        tgt = ttk.LabelFrame(parent, text="目前目標", style="Panel.TLabelframe", padding=6)
+        tgt.pack(fill=tk.X, pady=(0, 6))
+        self.target_name_lbl = ttk.Label(tgt, text="無", style="Value.TLabel")
+        self.target_name_lbl.pack(anchor=tk.W)
+        self.target_hp_canvas = tk.Canvas(tgt, height=10, bg="#330000", highlightthickness=0)
+        self.target_hp_canvas.pack(fill=tk.X, pady=2)
+        self.target_hp_text = ttk.Label(tgt, text="", style="Value.TLabel", foreground="#ff6666")
+        self.target_hp_text.pack(anchor=tk.W)
 
-        self.monster_listbox = tk.Listbox(mon_group, height=7, font=("Consolas", 9), selectmode=tk.SINGLE)
-        self.monster_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-        mon_scroll = ttk.Scrollbar(mon_group, orient=tk.VERTICAL, command=self.monster_listbox.yview)
-        mon_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.monster_listbox.config(yscrollcommand=mon_scroll.set)
+        # ─ Bot State ─────────────────────────────────────────────────────────
+        state_frame = ttk.LabelFrame(parent, text="狀態", style="Panel.TLabelframe", padding=6)
+        state_frame.pack(fill=tk.X, pady=(0, 6))
+        self.state_lbl = ttk.Label(state_frame, text="搜尋目標中", style="StatusActive.TLabel")
+        self.state_lbl.pack(anchor=tk.W)
+        self.dest_lbl = ttk.Label(state_frame, text="獵場：話島地監 1F",
+                                  style="Value.TLabel", foreground="#aaaacc")
+        self.dest_lbl.pack(anchor=tk.W)
 
-        mon_btn_bar = ttk.Frame(left_panel)
-        mon_btn_bar.pack(fill=tk.X, pady=(0, 6))
-        self.select_tgt_btn = ttk.Button(mon_btn_bar, text="選為目標 (Select)", command=self._on_select_target)
-        self.select_tgt_btn.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=2)
-        self.attack_tgt_btn = ttk.Button(mon_btn_bar, text="手動攻擊 (Attack)", command=self._on_manual_attack)
-        self.attack_tgt_btn.pack(side=tk.RIGHT, expand=True, fill=tk.X, padx=2)
+        # Destination change button
+        ttk.Button(state_frame, text="更換獵場", command=self._on_change_destination,
+                   style="Action.TButton").pack(anchor=tk.W, pady=(4, 0))
 
-        # Inventory
-        inv_group = ttk.LabelFrame(left_panel, text="角色背包 (Inventory)", padding=6)
-        inv_group.pack(fill=tk.BOTH, expand=True)
+        # ─ Helper Modules ────────────────────────────────────────────────────
+        helper_frame = ttk.LabelFrame(parent, text="輔助", style="Panel.TLabelframe", padding=6)
+        helper_frame.pack(fill=tk.X, pady=(0, 6))
 
-        self.inv_listbox = tk.Listbox(inv_group, height=6, font=("Consolas", 9), selectmode=tk.SINGLE)
+        self.helper_status_lbl = ttk.Label(helper_frame, text="● 輔助運行中",
+                                           style="StatusActive.TLabel")
+        self.helper_status_lbl.pack(anchor=tk.W, pady=(0, 4))
+
+        # Module dots
+        self._module_labels: dict = {}
+        modules_display = [
+            ("auto_target", "自動選怪"),
+            ("auto_attack", "自動攻擊"),
+            ("auto_move", "自動移動"),
+            ("auto_potion", "自動喝水"),
+            ("auto_loot", "自動撿物"),
+            ("auto_return", "自動回城"),
+        ]
+        for key, label in modules_display:
+            row = ttk.Frame(helper_frame, style="Panel.TFrame")
+            row.pack(fill=tk.X)
+            dot = ttk.Label(row, text="● ", foreground="#00cc44",
+                            background="#15152a", font=("Helvetica", 9))
+            dot.pack(side=tk.LEFT)
+            ttk.Label(row, text=label, style="Value.TLabel",
+                      font=("Helvetica", 9)).pack(side=tk.LEFT)
+            self._module_labels[key] = dot
+
+        # ─ Inventory ─────────────────────────────────────────────────────────
+        inv_frame = ttk.LabelFrame(parent, text="背包", style="Panel.TLabelframe", padding=4)
+        inv_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
+
+        self.inv_listbox = tk.Listbox(
+            inv_frame, height=6,
+            font=("Consolas", 9),
+            bg="#0d0d1e", fg="#ccccee",
+            selectbackground="#334466",
+            selectforeground="#ffffff",
+            activestyle="none",
+        )
         self.inv_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-        inv_scroll = ttk.Scrollbar(inv_group, orient=tk.VERTICAL, command=self.inv_listbox.yview)
+        inv_scroll = ttk.Scrollbar(inv_frame, orient=tk.VERTICAL,
+                                   command=self.inv_listbox.yview)
         inv_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.inv_listbox.config(yscrollcommand=inv_scroll.set)
+        self.inv_listbox.bind("<Double-Button-1>", self._on_inv_double_click)
 
-        inv_btn_bar = ttk.Frame(left_panel)
-        inv_btn_bar.pack(fill=tk.X, pady=(4, 0))
-        self.use_item_btn = ttk.Button(inv_btn_bar, text="手動使用物品 (Use Item)", command=self._on_use_item)
-        self.use_item_btn.pack(fill=tk.X, padx=2)
+    def _build_action_bar(self, parent) -> None:
+        """Build the action bar with Pause, attack, potion, return town, D-pad."""
+        bar = ttk.Frame(parent, style="Panel.TFrame", padding=6)
+        bar.pack(fill=tk.X, pady=(0, 4))
 
-        # --- CENTER PANEL: Manual Controls & D-Pad ---
-        center_panel = ttk.Frame(paned, width=280, padding=6)
-        paned.add(center_panel, weight=0)
-
-        # Pause / Resume Helper Button
-        self.pause_btn = ttk.Button(
-            center_panel,
-            text="❚❚ 暫停 Helper (手動介入)",
+        # Pause / Resume Helper (large prominent button)
+        self.pause_btn = tk.Button(
+            bar, text="⏸ 暫停輔助",
             command=self._on_toggle_pause,
-            style="Action.TButton",
+            bg="#3a2200", fg="#ffaa00",
+            activebackground="#554400", activeforeground="#ffffff",
+            font=("Helvetica", 10, "bold"),
+            relief=tk.FLAT, padx=8, pady=4,
         )
-        self.pause_btn.pack(fill=tk.X, pady=6)
+        self.pause_btn.pack(side=tk.LEFT, padx=4)
 
-        # Directional D-Pad
-        dpad_group = ttk.LabelFrame(center_panel, text="手動方向移動 (Manual Movement)", padding=8)
-        dpad_group.pack(fill=tk.X, pady=6)
+        ttk.Separator(bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
 
-        # 3x3 Grid for headings:
-        # 7(NW)  0(N)   1(NE)
-        # 6(W)   Stop   2(E)
-        # 5(SW)  4(S)   3(SE)
-        btn_nw = ttk.Button(dpad_group, text="↖ NW", width=6, command=lambda: self.vm.manual_move(7))
-        btn_nw.grid(row=0, column=0, padx=3, pady=3)
-        btn_n = ttk.Button(dpad_group, text="↑ N", width=6, command=lambda: self.vm.manual_move(0))
-        btn_n.grid(row=0, column=1, padx=3, pady=3)
-        btn_ne = ttk.Button(dpad_group, text="↗ NE", width=6, command=lambda: self.vm.manual_move(1))
-        btn_ne.grid(row=0, column=2, padx=3, pady=3)
+        # Quick action buttons
+        btn_cfg = [
+            ("⚔ 攻擊", self._on_manual_attack),
+            ("🧪 喝藥水", self._on_drink_potion),
+            ("🏠 回城", self._on_return_town),
+        ]
+        for text, cmd in btn_cfg:
+            ttk.Button(bar, text=text, command=cmd, style="Action.TButton",
+                       width=9).pack(side=tk.LEFT, padx=3)
 
-        btn_w = ttk.Button(dpad_group, text="← W", width=6, command=lambda: self.vm.manual_move(6))
-        btn_w.grid(row=1, column=0, padx=3, pady=3)
-        btn_center = ttk.Label(dpad_group, text="●", width=6, anchor=tk.CENTER)
-        btn_center.grid(row=1, column=1, padx=3, pady=3)
-        btn_e = ttk.Button(dpad_group, text="→ E", width=6, command=lambda: self.vm.manual_move(2))
-        btn_e.grid(row=1, column=2, padx=3, pady=3)
+        ttk.Separator(bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
 
-        btn_sw = ttk.Button(dpad_group, text="↙ SW", width=6, command=lambda: self.vm.manual_move(5))
-        btn_sw.grid(row=2, column=0, padx=3, pady=3)
-        btn_s = ttk.Button(dpad_group, text="↓ S", width=6, command=lambda: self.vm.manual_move(4))
-        btn_s.grid(row=2, column=1, padx=3, pady=3)
-        btn_se = ttk.Button(dpad_group, text="↘ SE", width=6, command=lambda: self.vm.manual_move(3))
-        btn_se.grid(row=2, column=2, padx=3, pady=3)
+        # D-Pad (compact)
+        dpad = ttk.Frame(bar, style="Panel.TFrame")
+        dpad.pack(side=tk.LEFT)
 
-        # Quick Action Buttons
-        act_group = ttk.LabelFrame(center_panel, text="即時指令 (Quick Operations)", padding=8)
-        act_group.pack(fill=tk.X, pady=6)
+        # Compact 3x3 grid
+        pad_cfg = [
+            ("↖", 7, 0, 0), ("↑", 0, 0, 1), ("↗", 1, 0, 2),
+            ("←", 6, 1, 0), ("·", -1, 1, 1), ("→", 2, 1, 2),
+            ("↙", 5, 2, 0), ("↓", 4, 2, 1), ("↘", 3, 2, 2),
+        ]
+        for txt, heading, row, col in pad_cfg:
+            if heading == -1:
+                ttk.Label(dpad, text="●", foreground="#00cc44",
+                          background="#15152a", font=("Helvetica", 10)).grid(
+                    row=row, column=col, padx=1, pady=1)
+            else:
+                h = heading  # capture for lambda
+                tk.Button(dpad, text=txt, width=3,
+                          command=lambda hd=h: self.vm.manual_move(hd),
+                          bg="#1a1a2e", fg="#ccccff",
+                          activebackground="#333355",
+                          font=("Helvetica", 9), relief=tk.FLAT,
+                          padx=2, pady=1).grid(row=row, column=col, padx=1, pady=1)
 
-        ttk.Button(act_group, text="⚔ 攻擊當前目標 (Attack)", command=self._on_manual_attack).pack(fill=tk.X, pady=3)
-        ttk.Button(act_group, text="🍷 喝紅色藥水 (Red Potion)", command=self._on_drink_potion).pack(fill=tk.X, pady=3)
-        ttk.Button(act_group, text="🏠 回城卷軸 (Return Town)", command=self._on_return_town).pack(fill=tk.X, pady=3)
+        ttk.Separator(bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=6)
 
-        # Destination indicator
-        dest_box = ttk.LabelFrame(center_panel, text="當前獵場目標", padding=6)
-        dest_box.pack(fill=tk.X, pady=6)
-        self.dest_lbl = ttk.Label(dest_box, text="話島地監 1F", font=("Helvetica", 9, "bold"))
-        self.dest_lbl.pack()
+        # Config button
+        ttk.Button(bar, text="⚙ 設定", command=self.open_config_dialog,
+                   style="Action.TButton").pack(side=tk.LEFT, padx=4)
 
-        # --- RIGHT PANEL: Activity Log & Trace Monitor ---
-        right_panel = ttk.Frame(paned, padding=4)
-        paned.add(right_panel, weight=3)
+        # Nearby monsters (compact listbox on right side of action bar)
+        mon_box = ttk.LabelFrame(bar, text="附近怪物", style="Panel.TLabelframe", padding=2)
+        mon_box.pack(side=tk.RIGHT, padx=6)
+        self.monster_listbox = tk.Listbox(
+            mon_box, height=4, width=28,
+            font=("Consolas", 8),
+            bg="#0d0d1e", fg="#ff8888",
+            selectbackground="#441111",
+            selectforeground="#ffffff",
+            activestyle="none",
+        )
+        self.monster_listbox.pack(side=tk.LEFT, fill=tk.BOTH)
+        self.monster_listbox.bind("<Double-Button-1>", self._on_monster_double_click)
+        self.monster_listbox.bind("<<ListboxSelect>>", self._on_monster_select)
 
-        log_group = ttk.LabelFrame(right_panel, text="即時操作紀錄 (Activity Log / Trace Monitor)", padding=6)
-        log_group.pack(fill=tk.BOTH, expand=True)
+    def _build_activity_log(self, parent) -> None:
+        """Build the Chinese game activity log (bounded, append-only)."""
+        log_frame = ttk.LabelFrame(parent, text="活動訊息", style="Panel.TLabelframe", padding=4)
+        log_frame.pack(fill=tk.X)
 
-        self.log_text = scrolledtext.ScrolledText(log_group, wrap=tk.WORD, font=("Consolas", 9), bg="#1e1e1e", fg="#d4d4d4")
-        self.log_text.pack(fill=tk.BOTH, expand=True)
-
-        # -----------------------------------------------------------------------
-        # BOTTOM: Operations Count & Status Bar
-        # -----------------------------------------------------------------------
-        bot_bar = ttk.Frame(main_frame, padding=4)
-        bot_bar.pack(fill=tk.X, side=tk.BOTTOM)
-
-        self.status_bar_lbl = ttk.Label(
-            bot_bar,
-            text="MOVE: 0 | ATTACK: 0 | LOOT: 0 | USE_ITEM: 0 | RETURN_TOWN: 0",
+        self.log_text = tk.Text(
+            log_frame,
+            height=5,
             font=("Consolas", 9),
-            foreground="darkblue",
+            bg="#0a0a1a", fg="#cccccc",
+            wrap=tk.WORD,
+            state=tk.DISABLED,  # Read-only
         )
-        self.status_bar_lbl.pack(side=tk.LEFT)
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        log_scroll = ttk.Scrollbar(log_frame, orient=tk.VERTICAL,
+                                   command=self.log_text.yview)
+        log_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.log_text.config(yscrollcommand=log_scroll.set)
 
-        self.virtual_time_lbl = ttk.Label(bot_bar, text="T=000000 ms", font=("Consolas", 9))
-        self.virtual_time_lbl.pack(side=tk.RIGHT)
+        # Tag colors for different event types
+        self.log_text.tag_configure("damage", foreground="#ff8888")
+        self.log_text.tag_configure("death", foreground="#ff4444")
+        self.log_text.tag_configure("heal", foreground="#44ff88")
+        self.log_text.tag_configure("loot", foreground="#ffd700")
+        self.log_text.tag_configure("levelup", foreground="#ffff00", font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("map", foreground="#88aaff")
+        self.log_text.tag_configure("shop", foreground="#aaddff")
+        self.log_text.tag_configure("return", foreground="#ffaa66")
+        self.log_text.tag_configure("default", foreground="#cccccc")
 
-    # ---------------------------------------------------------------------------
-    # UI Refresh & Polling Tick
-    # ---------------------------------------------------------------------------
+    # ─────────────────────────── Polling Loops ───────────────────────────────
 
-    def _poll_tick(self) -> None:
-        """Periodic UI update loop invoked every 100ms."""
-        if not self._polling_active:
+    def _poll_canvas(self) -> None:
+        """Update 2D world canvas at ~12 FPS."""
+        if not self._canvas_active:
             return
-
         try:
-            self.update_ui()
+            snap = self.vm.get_cached_snapshot()
+            if snap is not None:
+                grid = self._get_map_grid(snap.map_id)
+                self.world_canvas.update_view(snap, grid)
         except Exception as e:
-            print(f"[UI ERROR] Failed to update UI: {e}")
+            pass  # Canvas errors must never freeze the game
+        self.root.after(self._POLL_CANVAS_MS, self._poll_canvas)
 
-        self.root.after(100, self._poll_tick)
+    def _poll_hud(self) -> None:
+        """Update player HUD, target, state, helper, inventory at ~7 FPS."""
+        if not self._hud_active:
+            return
+        try:
+            snap = self.vm.refresh_snapshot()
+            self._update_hud(snap)
+        except Exception as e:
+            pass
+        self.root.after(self._POLL_HUD_MS, self._poll_hud)
 
-    def update_ui(self) -> None:
-        """Pulls latest snapshot from runtime and updates all widgets."""
-        snap = self.vm.refresh_snapshot()
+    def _poll_log(self) -> None:
+        """Update activity log at ~5 FPS (append-only)."""
+        if not self._log_active:
+            return
+        try:
+            snap = self.vm.get_cached_snapshot()
+            if snap is not None and hasattr(snap, "game_events"):
+                self._append_new_events(snap.game_events)
+        except Exception as e:
+            pass
+        self.root.after(self._POLL_LOG_MS, self._poll_log)
 
-        # Update Player info
-        self.char_name_lbl.config(text=f"{snap.player_name} (Knight)")
-        self.level_lbl.config(text=self.vm.level_str)
-        self.location_lbl.config(text=self.vm.location_str)
-        self.adena_lbl.config(text=self.vm.adena_str)
-        self.weapon_lbl.config(text=f"武器: {self.vm.weapon_str}")
+    def _get_map_grid(self, map_id: int):
+        """Get cached WorldMapGrid for a given map_id."""
+        if map_id not in self._map_grid_cache:
+            try:
+                self._map_grid_cache[map_id] = self.runtime.session.world.maps.get(map_id)
+            except Exception:
+                self._map_grid_cache[map_id] = None
+        return self._map_grid_cache[map_id]
 
-        # Update HP & MP
-        self.hp_bar["value"] = self.vm.hp_ratio * 100
-        self.hp_text_lbl.config(text=self.vm.hp_str)
-        self.mp_bar["value"] = self.vm.mp_ratio * 100
-        self.mp_text_lbl.config(text=self.vm.mp_str)
+    # ─────────────────────────── HUD Update ──────────────────────────────────
 
-        # Update Helper Status Badge & Pause Button
-        if snap.helper_paused:
-            self.helper_badge_lbl.config(text="❚❚ HELPER PAUSED (手動模式)", style="StatusPaused.TLabel")
-            self.pause_btn.config(text="▶ 恢復 Helper (自動狩獵)")
+    def _update_hud(self, snap: PlayerRuntimeSnapshot) -> None:
+        """Update all HUD widgets from snapshot (called in main thread)."""
+        # Title char info
+        class_zh = {1: "騎士", 2: "魔法師", 3: "精靈"}.get(snap.class_type, "冒險者")
+        self.title_char_lbl.config(text=f"Lv {snap.level} {class_zh}")
+
+        # HP bar (Canvas-based for color control)
+        hp_ratio = max(0.0, min(1.0, snap.hp / max(1, snap.max_hp)))
+        hp_color = "#00cc44" if hp_ratio > 0.5 else ("#ffaa00" if hp_ratio > 0.25 else "#ff2222")
+        self._draw_bar(self.hp_canvas, hp_ratio, hp_color)
+        self.hp_text_lbl.config(text=f"{snap.hp}/{snap.max_hp}")
+
+        # MP bar
+        mp_ratio = max(0.0, min(1.0, snap.mp / max(1, snap.max_mp)))
+        self._draw_bar(self.mp_canvas, mp_ratio, "#2244cc")
+        self.mp_text_lbl.config(text=f"{snap.mp}/{snap.max_mp}")
+
+        # EXP / Adena
+        self.exp_lbl.config(text=f"EXP: {snap.exp:,}")
+        self.adena_lbl.config(text=f"金幣: {snap.adena:,}")
+
+        # Location
+        self.loc_lbl.config(text=f"{snap.map_name} ({snap.x}, {snap.y})")
+
+        # Weapon
+        self.weapon_lbl.config(text=f"武器：{_zh_weapon(snap.equipped_weapon_name)}")
+
+        # Target
+        if snap.active_target:
+            t = snap.active_target
+            self.target_name_lbl.config(text=t["name"], foreground="#ff8888")
+            t_ratio = max(0.0, min(1.0, t["hp"] / max(1, t["max_hp"])))
+            self._draw_bar(self.target_hp_canvas, t_ratio, "#cc2222")
+            self.target_hp_text.config(text=f"HP {t['hp']} / {t['max_hp']}")
         else:
-            self.helper_badge_lbl.config(text=f"● HELPER ACTIVE ({snap.bot_state})", style="StatusActive.TLabel")
-            self.pause_btn.config(text="❚❚ 暫停 Helper (手動介入)")
+            self.target_name_lbl.config(text="無", foreground="#666688")
+            self._draw_bar(self.target_hp_canvas, 0.0, "#440000")
+            self.target_hp_text.config(text="")
 
-        # Update Destination
-        self.dest_lbl.config(text=snap.hunting_destination_name)
+        # Bot state (Chinese)
+        state_zh = BOT_STATE_ZH.get(snap.bot_state, snap.bot_state)
+        if snap.is_dead:
+            self.state_lbl.config(text="💀 死亡", style="Danger.TLabel")
+        elif snap.helper_paused:
+            self.state_lbl.config(text="⏸ 輔助已暫停 (手動模式)", style="StatusPaused.TLabel")
+        else:
+            self.state_lbl.config(text=f"▶ {state_zh}", style="StatusActive.TLabel")
 
-        # Update Nearby Monsters Listbox
-        self._update_monsters_list(snap.nearby_monsters, snap.active_target)
+        # Destination
+        dest_zh = _zh_dest(snap.hunting_destination_name)
+        self.dest_lbl.config(text=f"獵場：{dest_zh}")
 
-        # Update Inventory Listbox
-        self._update_inventory_list(snap.inventory)
+        # Helper pause button
+        if snap.helper_paused:
+            self.pause_btn.config(text="▶ 恢復輔助",
+                                  bg="#002222", fg="#00cc88")
+            self.helper_status_lbl.config(text="○ 輔助已暫停", style="StatusPaused.TLabel")
+        else:
+            self.pause_btn.config(text="⏸ 暫停輔助",
+                                  bg="#3a2200", fg="#ffaa00")
+            self.helper_status_lbl.config(text="● 輔助運行中", style="StatusActive.TLabel")
 
-        # Update Logs
-        self._update_logs(snap.recent_logs)
+        # Helper module dots
+        modules = snap.helper_modules
+        for key, dot_lbl in self._module_labels.items():
+            on = modules.get(key, True)
+            dot_lbl.config(text="● ", foreground="#00cc44" if on else "#666666")
 
-        # Update Bottom Status Bar
-        ops = snap.operations_count
-        ops_str = f"MOVE: {ops.get('MOVE_STEP', 0)} | ATTACK: {ops.get('ATTACK', 0)} | LOOT: {ops.get('LOOT', 0)} | USE_ITEM: {ops.get('USE_ITEM', 0)} | RET_TOWN: {ops.get('RETURN_TOWN', 0)}"
-        self.status_bar_lbl.config(text=ops_str)
-        self.virtual_time_lbl.config(text=f"T={snap.virtual_time_ms:06d} ms")
+        # Inventory (diff-update only when changed)
+        self._update_inventory(snap.inventory)
 
-    def _update_monsters_list(self, monsters: list, active_target: Optional[dict]) -> None:
-        self.monster_listbox.delete(0, tk.END)
-        for m in monsters:
-            marker = "★ " if active_target and active_target.get("uid") == m["uid"] else "  "
-            item_text = f"{marker}{m['name']:<12} Lv{m['level']:<2} HP:{m['hp']:>2}/{m['max_hp']:<2} (dist={m['dist']})"
-            self.monster_listbox.insert(tk.END, item_text)
+        # Monster list (diff-update)
+        self._update_monsters(snap.nearby_monsters, snap.active_target)
 
-    def _update_inventory_list(self, inventory: list) -> None:
+    def _draw_bar(self, canvas: tk.Canvas, ratio: float, color: str) -> None:
+        """Draw a simple progress bar on a Canvas widget."""
+        canvas.update_idletasks()
+        w = canvas.winfo_width()
+        h = canvas.winfo_height()
+        if w <= 1:
+            return
+        canvas.delete("all")
+        fill_w = int(w * ratio)
+        if fill_w > 0:
+            canvas.create_rectangle(0, 0, fill_w, h, fill=color, outline="")
+
+    def _update_inventory(self, inventory: list) -> None:
+        """Diff-update inventory listbox."""
+        # Simple strategy: rebuild if item count or any name changed
+        current_items = [
+            (i["item_id"], i["count"]) for i in inventory
+        ]
+        if hasattr(self, "_last_inv_items") and self._last_inv_items == current_items:
+            return
+        self._last_inv_items = current_items
         self.inv_listbox.delete(0, tk.END)
         for item in inventory:
-            eq_str = "[E] " if item["is_equipped"] else "    "
-            self.inv_listbox.insert(tk.END, f"{eq_str}{item['name']:<18} x{item['count']}")
+            eq_str = "◆ " if item.get("is_equipped") else "   "
+            name_zh = _zh_item(item["name"])
+            self.inv_listbox.insert(tk.END, f"{eq_str}{name_zh:<12} x{item['count']}")
 
-    def _update_logs(self, recent_logs: list) -> None:
-        current_lines = int(self.log_text.index("end-1c").split(".")[0])
-        if len(recent_logs) > 0 and len(recent_logs) != current_lines:
-            self.log_text.delete("1.0", tk.END)
-            for line in recent_logs:
-                self.log_text.insert(tk.END, line + "\n")
-            self.log_text.see(tk.END)
+    def _update_monsters(self, monsters: list, active_target) -> None:
+        """Diff-update monster listbox if UIDs changed."""
+        new_uids = [m.get("uid", 0) for m in monsters[:20]]
+        if new_uids == self._last_monster_uids:
+            # Still diff-update HP values (they change frequently)
+            pass
+        self._last_monster_uids = new_uids
+        target_uid = active_target["uid"] if active_target else None
+        self.monster_listbox.delete(0, tk.END)
+        for m in monsters[:20]:
+            marker = "★ " if m.get("uid") == target_uid else "   "
+            hp_pct = int(m["hp"] / max(1, m["max_hp"]) * 100)
+            line = f"{marker}{m['name']:<10} HP:{hp_pct:>3}% (d={m['dist']})"
+            self.monster_listbox.insert(tk.END, line)
 
-    # ---------------------------------------------------------------------------
-    # Button Handlers
-    # ---------------------------------------------------------------------------
+    def _append_new_events(self, game_events: list) -> None:
+        """Append-only log update. Only adds events we haven't shown yet."""
+        total = len(game_events)
+        if total <= self._last_log_event_count:
+            return
+        new_events = game_events[self._last_log_event_count:]
+        self._last_log_event_count = total
+
+        self.log_text.config(state=tk.NORMAL)
+        for evt in new_events:
+            ts = GameEventFormatter.format_time(evt.timestamp_ms)
+            line = f"[{ts}] {evt.text}\n"
+
+            tag = self._event_tag(evt.type)
+            self.log_text.insert(tk.END, line, tag)
+
+        # Trim top if over max lines
+        line_count = int(self.log_text.index("end-1c").split(".")[0])
+        if line_count > self._LOG_MAX_LINES:
+            excess = line_count - self._LOG_MAX_LINES
+            self.log_text.delete("1.0", f"{excess + 1}.0")
+
+        self.log_text.see(tk.END)
+        self.log_text.config(state=tk.DISABLED)
+
+    def _event_tag(self, event_type: str) -> str:
+        return {
+            "COMBAT_DAMAGE": "damage",
+            "MONSTER_DEATH": "death",
+            "COMBAT_HEAL": "heal",
+            "ITEM_USED": "heal",
+            "LOOT_PICKED": "loot",
+            "LEVEL_UP": "levelup",
+            "MAP_TRANSITION": "map",
+            "SHOP_PURCHASE": "shop",
+            "RETURN_STARTED": "return",
+            "PLAYER_DEATH": "damage",
+            "RESPAWN": "heal",
+        }.get(event_type, "default")
+
+    # ─────────────────────────── Button Handlers ─────────────────────────────
 
     def _on_toggle_pause(self) -> None:
         self.vm.toggle_helper_pause()
-        self.update_ui()
-
-    def _on_select_target(self) -> None:
-        sel = self.monster_listbox.curselection()
-        if sel:
-            idx = sel[0]
-            snap = self.vm.snapshot
-            if idx < len(snap.nearby_monsters):
-                target_m = snap.nearby_monsters[idx]
-                self.vm.manual_select_target(target_m["uid"])
-                self.update_ui()
 
     def _on_manual_attack(self) -> None:
         self.vm.manual_attack()
-        self.update_ui()
-
-    def _on_use_item(self) -> None:
-        sel = self.inv_listbox.curselection()
-        if sel:
-            idx = sel[0]
-            snap = self.vm.snapshot
-            if idx < len(snap.inventory):
-                item = snap.inventory[idx]
-                self.vm.manual_use_item(item["item_id"])
-                self.update_ui()
 
     def _on_drink_potion(self) -> None:
         self.vm.manual_use_item(104)  # Red Potion
-        self.update_ui()
 
     def _on_return_town(self) -> None:
         self.vm.manual_return_town()
-        self.update_ui()
+
+    def _on_monster_select(self, event=None) -> None:
+        """Select monster as target on single click."""
+        sel = self.monster_listbox.curselection()
+        if sel:
+            snap = self.vm.snapshot
+            idx = sel[0]
+            if idx < len(snap.nearby_monsters):
+                uid = snap.nearby_monsters[idx].get("uid")
+                if uid is not None:
+                    self.vm.manual_select_target(uid)
+
+    def _on_monster_double_click(self, event=None) -> None:
+        """Attack selected monster on double click."""
+        self._on_monster_select()
+        self.vm.manual_attack()
+
+    def _on_inv_double_click(self, event=None) -> None:
+        """Use item on double click."""
+        sel = self.inv_listbox.curselection()
+        if sel:
+            snap = self.vm.snapshot
+            idx = sel[0]
+            if idx < len(snap.inventory):
+                item = snap.inventory[idx]
+                self.vm.manual_use_item(item["item_id"])
+
+    def _on_change_destination(self) -> None:
+        """Open destination selection dialog."""
+        dest_options = {
+            "話島地監 1F": "ti_dungeon_1f",
+            "話島野外": "ti_surface_field",
+        }
+        choices = list(dest_options.keys())
+        # Simple selection dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title("選擇獵場")
+        dialog.geometry("260x160")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="選擇狩獵目的地：",
+                  font=("Helvetica", 10, "bold")).pack(pady=(16, 8))
+
+        var = tk.StringVar(value=choices[0])
+        cb = ttk.Combobox(dialog, textvariable=var, values=choices,
+                          state="readonly", width=24)
+        cb.pack(pady=4)
+
+        def confirm():
+            key = dest_options.get(var.get(), "ti_dungeon_1f")
+            self.vm.set_destination(key)
+            dialog.destroy()
+
+        ttk.Button(dialog, text="確認切換", command=confirm).pack(pady=12)
+        dialog.bind("<Return>", lambda e: confirm())
 
     def _on_speed_changed(self, event=None) -> None:
         val = self.speed_var.get()
         speed_map = {
-            "0.5x": 0.5,
-            "1.0x": 1.0,
-            "2.0x": 2.0,
-            "5.0x": 5.0,
-            "10.0x": 10.0,
-            "極速 Instant": 100.0,
+            "0.5x": 0.5, "1.0x": 1.0, "2.0x": 2.0,
+            "5.0x": 5.0, "10.0x": 10.0, "極速": 100.0,
         }
         speed = speed_map.get(val, 1.0)
         self.vm.set_speed(speed)
 
+    def _on_key_press(self, event) -> None:
+        """WASD keyboard movement."""
+        key_heading = {"w": 0, "a": 6, "s": 4, "d": 2,
+                       "W": 0, "A": 6, "S": 4, "D": 2}
+        heading = key_heading.get(event.char)
+        if heading is not None:
+            self.vm.manual_move(heading)
+
     def open_config_dialog(self) -> None:
-        """Opens interactive configuration panel window."""
         dialog = tk.Toplevel(self.root)
-        dialog.title("Helper 自動狩獵與規則設定 (Helper Configuration)")
+        dialog.title("輔助設定")
         dialog.geometry("680x560")
         dialog.minsize(600, 480)
         dialog.transient(self.root)
 
-        def on_applied():
-            self.update_ui()
-
-        panel = ConfigPanel(dialog, view_model=self.vm, on_applied=on_applied)
+        panel = ConfigPanel(dialog, view_model=self.vm)
         panel.pack(fill=tk.BOTH, expand=True)
 
     def on_close(self) -> None:
-        """Clean shutdown handler."""
-        self._polling_active = False
+        self._canvas_active = False
+        self._hud_active = False
+        self._log_active = False
         self.runtime.stop_background()
         self.root.destroy()
 
+
+# ─────────────────────────────────── main() ──────────────────────────────────
 
 def main(
     config_path: str = "configs/autonomous_default.json",
     contract_path: Optional[str] = None,
     seed: Optional[int] = 777777,
     speed: float = 1.0,
+    dest_key: Optional[str] = None,
     legacy_root: Optional[str] = None,
+    show_startup: bool = True,
 ) -> None:
-    root = tk.Tk()
+    """
+    Launch the interactive Headless Player game window.
+    
+    If show_startup=True (default), shows the startup dialog first so the
+    player can choose destination and helper profile before the world starts.
+    """
+    if show_startup:
+        from .startup_dialog import StartupDialog
+        dlg = StartupDialog(
+            configs_dir="configs",
+            default_config=config_path,
+            default_dest_key=dest_key or "ti_dungeon_1f",
+        )
+        result = dlg.show()
+        if result is None:
+            return  # User cancelled
+
+        config_path = result["config_path"]
+        speed = result["speed"]
+        chosen_dest_key = result["dest_key"]
+    else:
+        chosen_dest_key = dest_key or "ti_dungeon_1f"
+
+    # Create runtime AFTER user confirms (so world doesn't start during selection)
     runtime = HeadlessPlayerRuntime(
         config_path=config_path,
         contract_path=contract_path,
@@ -424,6 +768,13 @@ def main(
         speed=speed,
         legacy_root=legacy_root,
     )
+
+    # Apply chosen destination
+    if chosen_dest_key and chosen_dest_key in AVAILABLE_DESTINATIONS:
+        runtime.set_destination(chosen_dest_key)
+
+    # Launch game window
+    root = tk.Tk()
     app = PlayerWindow(root, runtime=runtime)
     root.mainloop()
 
