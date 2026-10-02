@@ -15,12 +15,12 @@ import argparse
 import json
 import os
 import sys
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from tools.map_metadata import MapsCsvReader
 from tools.map_decoder import LegacyMapDecoder
 from native_engine.world import World
-from native_engine.model import Actor, Position, Inventory, Weapon
+from native_engine.model import Actor, Position, Inventory, Weapon, Item
 from native_engine.transition import TransitionEngine, TransitionDefinition
 from native_engine.world_route import StaticTransitionProvider
 from native_engine.session import GameSession, HuntingArea, MonsterTemplate, Destination
@@ -197,16 +197,25 @@ def initialize_s007_session(
     if default_weapon_id:
         equipped_weapon = equip_mgr.get_weapon(default_weapon_id)
 
+    inv = Inventory()
+    for item_data in p_data.get("inventory", []):
+        inv.add(Item(
+            item_id=item_data["item_id"],
+            name=item_data["name"],
+            count=item_data.get("count", 1)
+        ))
+
     player = Actor(
         id=p_data["id"], name=p_data["name"], class_type=p_data["class_type"],
-        level=p_data["level"], hp=p_data["hp"], max_hp=p_data["hp"],
+        level=p_data["level"], hp=p_data["hp"], max_hp=p_data.get("max_hp", p_data["hp"]),
+        mp=p_data.get("mp", 10), max_mp=p_data.get("max_mp", p_data.get("mp", 10)),
         str=p_data["str"], dex=p_data["dex"], con=p_data["con"],
         int=p_data["int"], wis=p_data["wis"], cha=p_data["cha"],
         pos=Position(p_data["start_x"], p_data["start_y"], p_data["start_map"]),
         heading=p_data.get("start_heading", 0), auto_pickup=False,
-        inventory=Inventory(),
+        inventory=inv,
         equipped_weapon=equipped_weapon,
-        exp=0, lawful=0, is_dead=False,
+        exp=p_data.get("exp", 0), lawful=p_data.get("lawful", 0), is_dead=False,
         gfx=p_data.get("gfx", 61),
         gfx_mode=p_data.get("gfx_mode", 4),
         move_speed_ms=p_data.get("move_speed_ms", 640),
@@ -442,21 +451,23 @@ def run_s007_interactive(session: GameSession):
             print("未知指令")
 
 
-def run_autonomous_mvp(
+def run_headless_player_mvp(
     config_path: str = "configs/autonomous_default.json",
+    contract_path: Optional[str] = None,
     seed: Optional[int] = 777777,
-    duration_ms: int = 1800000,
-    speed: float = 1.0,
-    instant: bool = True,
+    duration_ms: int = 600000,
+    speed: Optional[float] = None,
+    instant: bool = False,
     verbose: bool = True,
     legacy_root_arg: Optional[str] = None,
-) -> None:
+) -> Dict[str, Any]:
     """
     Official L1J Headless Player MVP Entrypoint.
     Executes autonomous player driven by player-configurable automation helper.
     """
     from native_engine.bot import HeadlessBot, AutonomousConfig
     from native_engine.temporal import VirtualClock, Scheduler
+    from native_engine.clock import RealTimeClock
     from native_engine.model import Item
 
     print("=================================================================")
@@ -471,19 +482,24 @@ def run_autonomous_mvp(
     else:
         config = AutonomousConfig.load_json(resolved_config)
 
-    # 2. Initialize World Session
-    contract_path = resolve_path("scenario_007_contract.json")
-    session = initialize_s007_session(contract_path, legacy_root_arg, seed_override=seed)
-
-    clock = VirtualClock(0)
+    # 2. Unified Simulation Clock & Scheduler
+    if speed is not None and speed > 0:
+        clock = RealTimeClock(time_scale=speed)
+    else:
+        clock = VirtualClock(0)
     scheduler = Scheduler(clock)
 
-    # 3. Initialize Headless Player
+    # 3. Initialize World Session
+    resolved_contract = resolve_path(contract_path or "scenario_007_contract.json")
+    session = initialize_s007_session(
+        contract_path=resolved_contract,
+        legacy_root_arg=legacy_root_arg,
+        seed_override=seed,
+        clock=clock,
+    )
+
+    # 4. Initialize Headless Player (Authentic starting position from Contract - NO TELEPORT)
     player = session.player
-    # Position player at destination or starting point
-    player.map_id = config.hunting.destination.map_id
-    player.x = config.hunting.destination.target_x
-    player.y = config.hunting.destination.target_y
 
     def print_trace(msg: str):
         if verbose:
@@ -499,6 +515,7 @@ def run_autonomous_mvp(
         rng=session.population.rng,
         log_callback=print_trace,
         config=config,
+        provide_starter_supplies=False,
     )
 
     # Display Player & Automation Status
@@ -534,16 +551,16 @@ def run_autonomous_mvp(
     import time
     start_real = time.time()
 
-    # 4. Run Persistent Autonomous Session
+    # 5. Run Persistent Autonomous Session
     result = bot.run_session(max_kills=None, max_virtual_ms=duration_ms, allow_respawn=True)
 
     elapsed_real = time.time() - start_real
     speedup = (result["virtual_time_ms"] / 1000.0) / max(0.001, elapsed_real)
 
-    # 5. Display Final Summary
+    # 6. Display Final Summary
     net_adena = result["adena_earned"] - result["adena_spent"]
     print("\n=================================================================")
-    print("                   AUTONOMOUS GAMEPLAY SUMMARY                   ")
+    print("                   HEADLESS PLAYER RUNTIME SUMMARY               ")
     print("=================================================================")
     print(f"Simulation Result:  {result['reason']}")
     print(f"Virtual Duration:   {result['virtual_time_ms']} ms ({result['virtual_time_ms']/60000:.1f} mins) [Elapsed: {elapsed_real:.2f}s, {speedup:.1f}x]")
@@ -559,7 +576,21 @@ def run_autonomous_mvp(
     print(f"Resupply Cycles:    {result['resupply_cycles']}")
     print(f"Map Transitions:    {result['maps_traversed']}")
     print(f"Looted Items:       {result['loot_picked']} items")
+
+    print("\nPLAYER OPERATIONS EXECUTED:")
+    print("─────────────────────────────────────────────────────────────────")
+    ops = result.get("player_operations", {})
+    if ops:
+        for op_name, count in sorted(ops.items()):
+            print(f"  {op_name:<20}: {count}")
+    else:
+        print("  None recorded")
     print("=================================================================")
+    return result
+
+
+# Backward compatibility alias
+run_autonomous_mvp = run_headless_player_mvp
 
 
 # ---------------------------------------------------------------------------
@@ -570,19 +601,19 @@ def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="L1J Headless MVP")
+    parser = argparse.ArgumentParser(description="L1J Headless Player MVP Entrypoint")
     parser.add_argument("--demo", action="store_true", help="Automated demo (S006/S007 legacy compat)")
     parser.add_argument("--legacy-demo", action="store_true", help="Alias for --demo")
-    parser.add_argument("--interactive", action="store_true", help="Interactive text UI mode")
+    parser.add_argument("--interactive", action="store_true", help="Interactive text UI mode (legacy compat)")
     parser.add_argument("--s007", action="store_true", help="Use S007 legacy demo")
     parser.add_argument("--kills", type=int, default=1, help="Kill limit for legacy demo (default 1)")
     parser.add_argument("--seed", type=int, default=777777, help="Deterministic PRNG seed override (default 777777)")
-    parser.add_argument("--contract", default=None, help="Override contract path")
+    parser.add_argument("--contract", default=None, help="Path to scenario contract JSON (default: scenario_007_contract.json)")
     parser.add_argument("--legacy-root", default=None, help="Path to Eujenz/182c")
     parser.add_argument("--config", default="configs/autonomous_default.json", help="Path to autonomous config JSON")
-    parser.add_argument("--duration", type=int, default=1800000, help="Simulation duration in virtual ms (default 1800000 = 30m)")
-    parser.add_argument("--speed", type=float, default=1.0, help="Simulation speed multiplier")
-    parser.add_argument("--instant", action="store_true", default=True, help="Force instant execution (VirtualClock)")
+    parser.add_argument("--duration", type=int, default=600000, help="Simulation duration in virtual ms (default 600000 = 10m)")
+    parser.add_argument("--speed", type=float, default=None, help="Playback speed multiplier for real-time mode (e.g. 5.0)")
+    parser.add_argument("--instant", action="store_true", default=False, help="Force instant execution (VirtualClock)")
     parser.add_argument("--verbose", action="store_true", default=True, help="Output real-time trace log")
     args = parser.parse_args()
 
@@ -596,19 +627,21 @@ def main():
     elif is_demo and args.s007:
         # S007 legacy demo
         contract_path = args.contract or "scenario_007_contract.json"
-        clock = VirtualClock()
+        clock = VirtualClock(0)
         session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed, clock=clock)
         run_s007_demo(session, kill_limit=args.kills)
     elif args.interactive:
         # S007 interactive mode
         contract_path = args.contract or "scenario_007_contract.json"
-        clock = RealTimeClock(time_scale=args.speed)
+        speed = args.speed if args.speed is not None else 1.0
+        clock = RealTimeClock(time_scale=speed)
         session = initialize_s007_session(contract_path, args.legacy_root, seed_override=args.seed, clock=clock)
         run_s007_interactive(session)
     else:
         # Official MVP-05 Headless Player Autonomous Gameplay Entrypoint
-        run_autonomous_mvp(
+        run_headless_player_mvp(
             config_path=args.config,
+            contract_path=args.contract,
             seed=args.seed,
             duration_ms=args.duration,
             speed=args.speed,

@@ -267,14 +267,22 @@ python scenario_005_replay.py
 # Scenario 005: Differential Conformance against Legacy Oracle
 python scenario_005_differential.py
 
-# Headless Player MVP (MVP-05): Run autonomous simulation
-python mvp.py --duration 300000 --speed 100
+# Headless Player MVP (MVP-05): Official CLI Entrypoint (default 10 mins)
+python mvp.py
+
+# Custom duration & configuration profile
+python mvp.py --config configs/conservative_hunt.json --duration 600000
+
+# Scaled real-time playback (e.g. 5x speed)
+python mvp.py --speed 5.0
 
 # Headless Player MVP: Run Scenario 009 Multi-Profile Verification
 python scenario_009_headless_player_mvp.py --duration 600000
 
-# Legacy demo and replay modes
-python mvp.py --demo
+# Historical / Legacy compatibility modes
+python mvp.py --demo          # S006 legacy demo
+python mvp.py --demo --s007   # S007 legacy demo
+python mvp.py --interactive   # Text UI interactive mode
 python mvp_replay.py
 
 # Run all test suites

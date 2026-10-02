@@ -12,7 +12,13 @@
     "wis": 9,
     "cha": 12,
     "starting_weapon_id": 2,
-    "starting_adena": 0
+    "starting_adena": 0,
+    "starter_supplies": [
+      { "item_id": 104, "name": "Red Potion", "count": 30 },
+      { "item_id": 108, "name": "Green Potion", "count": 10 },
+      { "item_id": 139, "name": "Escape Scroll", "count": 5 },
+      { "item_id": 40308, "name": "Adena", "count": 1000 }
+    ]
   },
   "targeting": {
     "preferred_targets": [],

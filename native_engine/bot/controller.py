@@ -111,8 +111,32 @@ class HeadlessBot:
         # Recurring HP/MP regeneration timer (10s TIC, HpMpTimer.java:48-73)
         self.scheduler.schedule_after(10000, self._hp_mp_regen_tick, name="hp_mp_regen_tick")
 
-        # Starter supplies: ensure player has basic Red Potions, Green Potions, Escape Scrolls, and Adena
-        if provide_starter_supplies:
+        # Player Operations tracking
+        from collections import defaultdict
+        self.operations_count: Dict[str, int] = defaultdict(int)
+
+        # Initial state: If player is away from hunting destination, start by traveling to hunt
+        dest = self.config.hunting.destination
+        if self.player.map_id != dest.map_id or max(abs(self.player.x - dest.target_x), abs(self.player.y - dest.target_y)) > 4:
+            self.state = BotState.TRAVELING_TO_HUNT
+            self.policy.resupply_attempted_this_visit = True
+        else:
+            self.state = BotState.SEARCH_TARGET
+
+        # Starter supplies: load from configured profile (Layer 4 User Configuration)
+        configured_supplies = getattr(self.config.character, "starter_supplies", []) or getattr(self.config, "starter_supplies", [])
+        if configured_supplies:
+            for s in configured_supplies:
+                iid = s.get("item_id", 0)
+                name = s.get("name", "Item")
+                count = s.get("count", 1)
+                existing = next((i for i in self.player.inventory.items if i.item_id == iid), None)
+                if existing:
+                    existing.count += count
+                else:
+                    self.player.inventory.add(Item(item_id=iid, name=name, count=count))
+        elif provide_starter_supplies:
+            # Fallback starter supplies
             if not any(item.item_id == 104 for item in self.player.inventory.items):
                 starter_pot = Item(item_id=104, name="Red Potion", count=30)
                 self.player.inventory.add(starter_pot)
@@ -189,6 +213,20 @@ class HeadlessBot:
         )
         self.state = next_state
 
+        op_type = getattr(action, "action_type", None) or getattr(action, "op_type", None)
+        if op_type is not None:
+            from ..player_operation import PlayerOperationType
+            op_name = op_type.name if hasattr(op_type, "name") else str(op_type)
+            if op_type in (PlayerOperationType.SELECT_TARGET, PlayerOperationType.ATTACK, PlayerOperationType.CAST_SKILL):
+                tgt = action.target or self.active_target or self.player.current_target
+                if tgt:
+                    dist = max(abs(tgt.x - self.player.x), abs(tgt.y - self.player.y))
+                    self._log(f"[PERCEPTION] Target: {tgt.name} distance={dist} HP: {tgt.hp}/{tgt.max_hp}")
+            elif op_type in (PlayerOperationType.USE_ITEM, PlayerOperationType.USE_POTION):
+                hp_pct = int((self.player.hp / self.player.max_hp) * 100) if self.player.max_hp > 0 else 0
+                self._log(f"[PERCEPTION] Player HP: {self.player.hp}/{self.player.max_hp} ({hp_pct}%)")
+            self._log(f"[POLICY] Selected action: {op_name}")
+
         # 3. Action Execution via Player Operation (Layer 3 Player Action Model)
         self.execute_player_operation(action)
 
@@ -203,18 +241,26 @@ class HeadlessBot:
         from ..player_operation import PlayerOperationType
 
         op_type = getattr(op, "action_type", None) or getattr(op, "op_type", None)
+        if op_type is not None:
+            op_name = op_type.name if hasattr(op_type, "name") else str(op_type)
+            if op_name == "USE_POTION":
+                op_name = "USE_ITEM"
+            self.operations_count[op_name] += 1
 
         if op_type == PlayerOperationType.SELECT_TARGET:
             target = op.target
             self.player.current_target = target
             self.active_target = target
             if target:
+                self._log(f"[PLAYER] SELECT_TARGET -> {target.name}#{target.uid}")
+                self._log(f"[PLAYER] Target locked: {target.name}#{target.uid}")
                 self._log(f"[PLAYER] target={target.name}#{target.uid} (HP: {target.hp}/{target.max_hp})")
             self.scheduler.schedule_after(50, self.step, name="select_target_gate")
 
         elif op_type == PlayerOperationType.ATTACK:
             monster = op.target or self.player.current_target or self.active_target
             if monster:
+                self._log(f"[PLAYER] ATTACK -> {monster.name}#{monster.uid}")
                 self._execute_attack(monster)
             else:
                 self.scheduler.schedule_after(200, self.step, name="attack_action_gate")
@@ -238,10 +284,13 @@ class HeadlessBot:
             self._execute_cast_skill(op)
 
         elif op_type == PlayerOperationType.BUY_SUPPLY:
+            self._log(f"[PLAYER] BUY_SUPPLY -> Pandora Shop")
             self._execute_buy_supply(op.target)
 
         elif op_type == PlayerOperationType.TRANSITION_MAP:
-            self._execute_transition_map(op.target)
+            target_pos = op.target
+            self._log(f"[PLAYER] TRANSITION_MAP -> Portal at ({target_pos.x}, {target_pos.y})")
+            self._execute_transition_map(target_pos)
 
         elif op_type == PlayerOperationType.EQUIP:
             self._execute_equip(op.target)
@@ -257,6 +306,7 @@ class HeadlessBot:
             self.scheduler.schedule_after(200, self.step, name="npc_interact_gate")
 
         elif op_type == PlayerOperationType.RETURN_TOWN:
+            self._log(f"[PLAYER] RETURN_TOWN -> Returning to town")
             scroll = next((i for i in self.player.inventory.items if i.item_id in (139, 454) and i.count > 0), None)
             if scroll:
                 self._execute_use_item(scroll)
@@ -944,5 +994,6 @@ class HeadlessBot:
             "maps_traversed": self.maps_traversed,
             "hunt_cycles": self.hunt_cycles,
             "resupply_cycles": self.resupply_cycles,
+            "player_operations": dict(self.operations_count),
             "trace_log": self.trace_log,
         }

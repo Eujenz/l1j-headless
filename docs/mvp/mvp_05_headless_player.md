@@ -56,3 +56,28 @@ The runtime outputs standard, human-readable player trace events:
 - **Path Equivalence**: `tests/test_player_operation.py:test_manual_vs_automation_path_equivalence` proves that manual commands and automated rules invoke identical internal logic.
 - **Target Selection Prerequisite**: `tests/test_player_operation.py:test_select_target_operation` proves that attacks cannot proceed without prior target selection.
 - **Item Consumption**: All canonical consumables (Red, Orange, Clear, Green/Haste, Bravery, Escape Scroll) function strictly according to L1J 1.82 server source code.
+- **No Startup Teleport**: Player begins at contract spawn coordinates `(32477, 32875, Map 0)`, walks 24 steps along the road to the portal, executes `TRANSITION_MAP`, and arrives at TI Dungeon 1F naturally.
+- **Unified Clock**: `GameSession`, `HeadlessBot`, `Scheduler`, regeneration timers, and potion cooldowns share a single canonical simulation clock.
+- **Player Operation Metrics**: Summary reports exact discrete player operation counts (`MOVE_STEP`, `SELECT_TARGET`, `ATTACK`, `USE_ITEM`, `LOOT`, `BUY_SUPPLY`, `TRANSITION_MAP`).
+
+---
+
+## 5. Official CLI Entrypoint (`mvp.py`)
+
+```bash
+# Default: Runs official Headless Player autonomous runtime (10 mins, instant VirtualClock)
+python mvp.py
+
+# Custom duration & configuration profile
+python mvp.py --config configs/conservative_hunt.json --duration 600000
+python mvp.py --config configs/aggressive_hunt.json --duration 600000
+
+# Scaled real-time playback
+python mvp.py --speed 5.0
+
+# Legacy compatibility modes (preserved for regression testing)
+python mvp.py --demo
+python mvp.py --demo --s007
+python mvp.py --interactive
+```
+

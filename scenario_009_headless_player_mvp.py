@@ -47,14 +47,9 @@ def run_single_profile(
     print(f"  Destination:     {config.hunting.destination.name} (Map {config.hunting.destination.map_id})")
 
     # Initialize World & Bot
-    session = initialize_s007_session(seed_override=seed)
     clock = VirtualClock(0)
     scheduler = Scheduler(clock)
-
-    dest = config.hunting.destination
-    session.player.map_id = dest.map_id
-    session.player.x = dest.target_x
-    session.player.y = dest.target_y
+    session = initialize_s007_session(seed_override=seed, clock=clock)
 
     bot = HeadlessBot(
         player=session.player,

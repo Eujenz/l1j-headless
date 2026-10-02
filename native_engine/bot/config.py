@@ -379,6 +379,7 @@ class CharacterConfig:
     cha: int = 12
     starting_weapon_id: int = 2
     starting_adena: int = 0
+    starter_supplies: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -393,6 +394,7 @@ class CharacterConfig:
             "cha": self.cha,
             "starting_weapon_id": self.starting_weapon_id,
             "starting_adena": self.starting_adena,
+            "starter_supplies": self.starter_supplies,
         }
 
     @classmethod
@@ -409,6 +411,7 @@ class CharacterConfig:
             cha=int(data.get("cha", 12)),
             starting_weapon_id=int(data.get("starting_weapon_id", 2)),
             starting_adena=int(data.get("starting_adena", 0)),
+            starter_supplies=list(data.get("starter_supplies", [])),
         )
 
 
