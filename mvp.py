@@ -466,8 +466,7 @@ def run_headless_player_mvp(
     Executes autonomous player driven by player-configurable automation helper.
     """
     from native_engine.bot import HeadlessBot, AutonomousConfig
-    from native_engine.temporal import VirtualClock, Scheduler
-    from native_engine.clock import RealTimeClock
+    from native_engine.temporal import BaseClock, VirtualClock, RealTimeClock, Scheduler
     from native_engine.model import Item
 
     print("=================================================================")
@@ -552,7 +551,36 @@ def run_headless_player_mvp(
     start_real = time.time()
 
     # 5. Run Persistent Autonomous Session
-    result = bot.run_session(max_kills=None, max_virtual_ms=duration_ms, allow_respawn=True)
+    try:
+        result = bot.run_session(max_kills=None, max_virtual_ms=duration_ms, allow_respawn=True)
+    except KeyboardInterrupt:
+        print("\n\n[!] 玩家手動中斷 (KeyboardInterrupt received) - 正在生成階段結算報告...")
+        duration = clock.now()
+        result = {
+            "reason": "USER_INTERRUPTED",
+            "kills": bot.kills,
+            "respawns": bot.respawn_count,
+            "final_level": bot.player.level,
+            "final_exp": bot.player.exp,
+            "final_hp": bot.player.hp,
+            "max_hp": bot.player.max_hp,
+            "virtual_time_ms": duration,
+            "damage_dealt": bot.total_damage_dealt,
+            "damage_taken": bot.total_damage_taken,
+            "items_looted": [f"{item.name} x{item.count}" for item in bot.items_looted],
+            "potions_consumed": bot.potions_consumed,
+            "emergency_returns": bot.emergency_escapes,
+            "town_visits": bot.town_visits,
+            "shop_purchases": bot.shop_purchases,
+            "adena_earned": bot.adena_earned,
+            "adena_spent": bot.adena_spent,
+            "loot_picked": len(bot.items_looted),
+            "maps_traversed": bot.maps_traversed,
+            "hunt_cycles": bot.hunt_cycles,
+            "resupply_cycles": bot.resupply_cycles,
+            "player_operations": dict(bot.operations_count),
+            "trace_log": bot.trace_log,
+        }
 
     elapsed_real = time.time() - start_real
     speedup = (result["virtual_time_ms"] / 1000.0) / max(0.001, elapsed_real)

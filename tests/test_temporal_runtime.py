@@ -12,7 +12,13 @@ Verifies:
   - Boundary conditions and performance baseline.
 """
 import unittest
-from native_engine.temporal import VirtualClock, ScheduledEvent, Scheduler
+from native_engine.temporal import (
+    BaseClock,
+    VirtualClock,
+    RealTimeClock,
+    ScheduledEvent,
+    Scheduler,
+)
 
 
 class TestVirtualClock(unittest.TestCase):
@@ -67,6 +73,54 @@ class TestVirtualClock(unittest.TestCase):
             clock.advance(10.5)  # type: ignore
         with self.assertRaises(TypeError):
             clock.set(10.5)  # type: ignore
+
+
+class TestRealTimeClock(unittest.TestCase):
+    """Test RealTimeClock functionality, pacing, and temporal invariants."""
+
+    def test_initial_time_and_scale(self):
+        clock_default = RealTimeClock()
+        self.assertEqual(clock_default.now(), 0)
+        self.assertEqual(clock_default.current_time_ms, 0)
+        self.assertAlmostEqual(clock_default.time_scale, 1.0)
+
+        clock_scaled = RealTimeClock(initial_time_ms=500, time_scale=2.5)
+        self.assertEqual(clock_scaled.now(), 500)
+        self.assertAlmostEqual(clock_scaled.time_scale, 2.5)
+
+        # Legacy start_time_ms kwarg
+        clock_legacy = RealTimeClock(start_time_ms=300)
+        self.assertEqual(clock_legacy.now(), 300)
+
+        with self.assertRaises(ValueError):
+            RealTimeClock(-10)
+
+        with self.assertRaises(TypeError):
+            RealTimeClock("100")  # type: ignore
+
+    def test_advance_and_set_monotonic(self):
+        clock = RealTimeClock(0, time_scale=100.0)
+        self.assertEqual(clock.advance(50), 50)
+        self.assertEqual(clock.now(), 50)
+        self.assertEqual(clock.set(100), 100)
+        self.assertEqual(clock.now(), 100)
+
+        # Rejects backwards
+        with self.assertRaises(ValueError):
+            clock.advance(-1)
+        with self.assertRaises(ValueError):
+            clock.set(90)
+
+    def test_scheduler_integration_with_real_time_clock(self):
+        clock = RealTimeClock(0, time_scale=50.0)
+        scheduler = Scheduler(clock)
+
+        log = []
+        scheduler.schedule_at(20, lambda: log.append(("EVT", clock.now())))
+        scheduler.run_until(20)
+
+        self.assertEqual(clock.now(), 20)
+        self.assertEqual(log, [("EVT", 20)])
 
 
 class TestScheduledEvent(unittest.TestCase):

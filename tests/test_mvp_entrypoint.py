@@ -191,6 +191,31 @@ class TestMvpEntrypoint(unittest.TestCase):
         self.assertEqual(result["reason"], "SIMULATION_TIME_REACHED")
         self.assertTrue(isinstance(net_adena, int))
 
+    def test_g_speed_multiplier_support(self):
+        """
+        Test G — Real-time Speed Multiplier Support:
+        Ensures `mvp.py --speed 2.0` (or programmatically speed=100.0) integrates seamlessly
+        with RealTimeClock and Scheduler without raising AttributeError or interface errors.
+        """
+        result = run_headless_player_mvp(
+            config_path="configs/autonomous_default.json",
+            duration_ms=1000,
+            speed=100.0,
+            verbose=False,
+        )
+        self.assertEqual(result["reason"], "SIMULATION_TIME_REACHED")
+        self.assertEqual(result["virtual_time_ms"], 1000)
+
+        # CLI subprocess verification
+        res = subprocess.run(
+            [sys.executable, "mvp.py", "--speed", "100.0", "--duration", "500"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(res.returncode, 0, f"mvp.py --speed execution failed: {res.stderr}")
+        self.assertIn("HEADLESS PLAYER RUNTIME SUMMARY", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

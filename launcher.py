@@ -48,7 +48,7 @@ def main():
 
         if choice in ("", "1"):
             print("\n[*] 正在啟動: 真實節奏遊玩 (1.0x)...")
-            subprocess.run([sys.executable, "mvp.py"])
+            subprocess.run([sys.executable, "mvp.py", "--speed", "1.0"])
             safe_pause()
         elif choice == "2":
             print("\n[*] 正在啟動: 快速倍速遊玩 (2.0x)...")

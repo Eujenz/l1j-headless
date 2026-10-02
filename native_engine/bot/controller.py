@@ -16,7 +16,7 @@ from ..progression import ProgressionManager
 from ..combat import CanonicalCombat
 from ..navigation import AStarPlanner
 from ..movement import MovementEngine, can_move, HEADING_DELTA
-from ..temporal import VirtualClock, Scheduler
+from ..temporal import BaseClock, VirtualClock, Scheduler
 from ..spr_action import get_pc_action_interval
 from ..status import StatusManager, StatusType
 from ..skill import SkillEngine
@@ -37,7 +37,7 @@ class HeadlessBot:
         world_maps: Dict[int, WorldMapGrid],
         population: PopulationManager,
         progression: ProgressionManager,
-        clock: Optional[VirtualClock] = None,
+        clock: Optional[BaseClock] = None,
         scheduler: Optional[Scheduler] = None,
         rng: Optional[any] = None,
         log_callback: Optional[Callable[[str], None]] = None,

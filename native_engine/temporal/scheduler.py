@@ -11,7 +11,7 @@ Architecture:
 """
 import heapq
 from typing import Callable, Any, Optional
-from .clock import VirtualClock
+from .clock import BaseClock, VirtualClock
 from .event import ScheduledEvent
 
 
@@ -27,8 +27,8 @@ class Scheduler:
     - After run_until(target_time_ms) finishes, clock.now() == target_time_ms.
     """
 
-    def __init__(self, clock: Optional[VirtualClock] = None):
-        self.clock: VirtualClock = clock if clock is not None else VirtualClock(0)
+    def __init__(self, clock: Optional[BaseClock] = None):
+        self.clock: BaseClock = clock if clock is not None else VirtualClock(0)
         self._queue: list[ScheduledEvent] = []
         self._sequence_counter: int = 0
         self._active_count: int = 0
