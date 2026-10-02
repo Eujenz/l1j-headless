@@ -20,6 +20,7 @@ class ShopItem:
 class NpcShop:
     """
     Pandora's Shop on Talking Island (npcid 3).
+    Catalog from L1J 1.82 legacy npc_shop.sql (npcid '3').
     """
     def __init__(self):
         self.npcid = 3
@@ -29,13 +30,20 @@ class NpcShop:
         self.catalog: Dict[int, ShopItem] = {
             104: ShopItem(item_id=104, name="Red Potion", price=37),
             108: ShopItem(item_id=108, name="Green Potion", price=120),
+            139: ShopItem(item_id=139, name="Escape Scroll", price=120),
+            103: ShopItem(item_id=103, name="Orange Potion", price=150),
         }
 
-    def buy_item(self, player: Actor, item_id: int, count: int = 1) -> Tuple[bool, str]:
+    def buy_item(self, player: Actor, item_id: int, count: int = 1, check_proximity: bool = False) -> Tuple[bool, str]:
         """
         Execute purchase of item from shop.
         Deducts adena (Item 40308 / 'Adena') from player and adds bought item.
+        If check_proximity is True, player must be within 3 tiles of NPC in the same map.
         """
+        if check_proximity:
+            if player.map_id != self.pos.map_id or max(abs(player.x - self.pos.x), abs(player.y - self.pos.y)) > 3:
+                return False, "OUT_OF_RANGE"
+
         if item_id not in self.catalog:
             return False, "ITEM_NOT_IN_SHOP"
         if count <= 0:
@@ -60,3 +68,4 @@ class NpcShop:
 
 
 PANDORA_SHOP = NpcShop()
+

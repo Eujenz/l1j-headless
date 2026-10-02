@@ -23,6 +23,7 @@ from ..skill import SkillEngine
 from .perception import PerceptionSystem, PerceptionSnapshot
 from .policy import BotPolicy, BotState, BotAction, BotActionType
 from .drop import DropSystem, GroundDrop
+from .config import AutonomousConfig
 
 
 class HeadlessBot:
@@ -41,6 +42,8 @@ class HeadlessBot:
         rng: Optional[any] = None,
         log_callback: Optional[Callable[[str], None]] = None,
         respawn_delay_override_ms: Optional[int] = None,
+        config: Optional[AutonomousConfig] = None,
+        provide_starter_supplies: bool = True,
     ):
         self.player = player
         self.world_maps = world_maps
@@ -57,16 +60,19 @@ class HeadlessBot:
         self.status_mgr = StatusManager(self.scheduler, self.clock)
         self.skill_engine = SkillEngine(self.rng)
 
+        # Configurable Autonomous Policy
+        self.config = config or AutonomousConfig()
+        self.policy = BotPolicy(config=self.config)
+
         # Bot subsystems
         self.perception_sys = PerceptionSystem(sight_radius=14)
-        self.policy = BotPolicy()
         self.drop_system = DropSystem(self.rng)
 
         # Movement engine for current map
         self._current_map_grid = self.world_maps[self.player.map_id]
         self.movement_engine = MovementEngine(self._current_map_grid)
 
-        # Bot State
+        # Bot State & Statistics
         self.state = BotState.SEARCH_TARGET
         self.active_target: Optional[Monster] = None
         self.kills = 0
@@ -74,6 +80,17 @@ class HeadlessBot:
         self.total_damage_taken = 0
         self.items_looted: List[Item] = []
         self.trace_log: List[str] = []
+
+        # Long-Running Lifecycle Metrics
+        self.emergency_escapes = 0
+        self.town_visits = 0
+        self.shop_purchases = 0
+        self.adena_earned = 0
+        self.adena_spent = 0
+        self.resupply_cycles = 0
+        self.hunt_cycles = 0
+        self.maps_traversed = 0
+        self.potions_consumed = 0
 
         # Action Intervals (Resolved dynamically via SprTable: GFX + Weapon)
         self.move_interval_ms = getattr(player, "move_speed_ms", 640)
@@ -94,13 +111,20 @@ class HeadlessBot:
         # Recurring HP/MP regeneration timer (10s TIC, HpMpTimer.java:48-73)
         self.scheduler.schedule_after(10000, self._hp_mp_regen_tick, name="hp_mp_regen_tick")
 
-        # Starter supplies: ensure player has basic Red Potions (item 104) and Green Potions (item 108)
-        if not any(item.item_id == 104 for item in self.player.inventory.items):
-            starter_pot = Item(item_id=104, name="Red Potion", count=30)
-            self.player.inventory.add(starter_pot)
-        if not any(item.item_id == 108 for item in self.player.inventory.items):
-            starter_green_pot = Item(item_id=108, name="Green Potion", count=10)
-            self.player.inventory.add(starter_green_pot)
+        # Starter supplies: ensure player has basic Red Potions, Green Potions, Escape Scrolls, and Adena
+        if provide_starter_supplies:
+            if not any(item.item_id == 104 for item in self.player.inventory.items):
+                starter_pot = Item(item_id=104, name="Red Potion", count=30)
+                self.player.inventory.add(starter_pot)
+            if not any(item.item_id == 108 for item in self.player.inventory.items):
+                starter_green_pot = Item(item_id=108, name="Green Potion", count=10)
+                self.player.inventory.add(starter_green_pot)
+            if not any(item.item_id in (139, 454) or "Escape" in item.name for item in self.player.inventory.items):
+                starter_escape = Item(item_id=139, name="Escape Scroll", count=5)
+                self.player.inventory.add(starter_escape)
+            if not any(item.item_id == 40308 or item.name == "Adena" for item in self.player.inventory.items):
+                starter_adena = Item(item_id=40308, name="Adena", count=1000)
+                self.player.inventory.add(starter_adena)
 
         self._log(f"PLAYER SPAWN: {player.name} (Lv{player.level} HP:{player.hp}/{player.max_hp} MP:{player.mp}/{player.max_mp}) at Map {player.map_id} ({player.x}, {player.y}) with {player.equipped_weapon.name if player.equipped_weapon else 'Bare Hands'}")
 
@@ -187,6 +211,16 @@ class HeadlessBot:
 
         elif action.action_type == BotActionType.CAST_SKILL:
             self._execute_cast_skill(action)
+
+        elif action.action_type == BotActionType.USE_ITEM:
+            item = action.target
+            self._execute_use_item(item)
+
+        elif action.action_type == BotActionType.BUY_SUPPLY:
+            self._execute_buy_supply(action.target)
+
+        elif action.action_type == BotActionType.TRANSITION_MAP:
+            self._execute_transition_map(action.target)
 
         elif action.action_type == BotActionType.STANDBY:
             # Standby 200ms
@@ -446,15 +480,19 @@ class HeadlessBot:
     def _execute_player_respawn(self) -> None:
         """
         Respawn player at canonical Talking Island town coordinates.
-        (Talking Island town: (32608, 32742) map 0)
+        (Talking Island town: (32599, 32931) map 0, getback_restart.sql:223)
         """
         self.player.is_dead = False
         self.player.hp = max(1, self.player.max_hp // 2)
+        old_map = self.player.map_id
         self.player.map_id = 0
-        self.player.x = 32608
-        self.player.y = 32742
+        self.player.x = 32599
+        self.player.y = 32931
         self.active_target = None
         self.state = BotState.SEARCH_TARGET
+        self.town_visits += 1
+        if old_map != 0:
+            self.maps_traversed += 1
         self._sync_map_grid()
         self._log(f"PLAYER RESPAWN: Revived at Town ({self.player.x}, {self.player.y}) with HP: {self.player.hp}/{self.player.max_hp}")
         self.step()
@@ -467,6 +505,8 @@ class HeadlessBot:
         if self.player.x == drop.pos.x and self.player.y == drop.pos.y:
             self.player.inventory.add(drop.item)
             self.items_looted.append(drop.item)
+            if drop.item.item_id == 40308 or drop.item.name == "Adena":
+                self.adena_earned += drop.item.count
             self.drop_system.remove_drop(drop)
             self._log(f"LOOT: Picked up {drop.item.name} x{drop.item.count} -> Added to Inventory")
             self.scheduler.schedule_after(200, self.step, name="loot_action_gate")
@@ -504,6 +544,7 @@ class HeadlessBot:
         Drink potion for HP recovery or Status Buff.
         Parity with HealingPotion.java, LesserHealingPotion.java, HastePotion.java.
         """
+        self.potions_consumed += 1
         if potion.item_id == 104:
             # Red Potion (LesserHealingPotion.java: MIN_HP=10, MAX_HP=30)
             heal = self.rng.rand(10, 30, "RedPotionHeal")
@@ -513,7 +554,7 @@ class HeadlessBot:
             # Green Potion (HastePotion.java: 300s duration, applies Haste)
             self.status_mgr.apply_haste(self.player, duration_sec=300)
             self._log(f"POTION: Drank Green Potion -> Haste applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
-        elif potion.item_id == 105:
+        elif potion.item_id in (103, 105):
             # Orange Potion (HealingPotion.java: MIN_HP=30, MAX_HP=70)
             heal = self.rng.rand(30, 70, "OrangePotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
@@ -534,6 +575,133 @@ class HeadlessBot:
 
         # Action gate: 600ms potion cooldown
         self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
+
+    def _execute_use_item(self, item: Item) -> None:
+        """
+        Use non-potion consumable item (e.g. Escape Scroll item 139 / 454).
+        Implements canonical ScrollEscapeTemp / GetBackRestartTable behavior.
+        """
+        if item.item_id in (139, 454) or "Escape" in item.name or "回城" in item.name:
+            item.count -= 1
+            if item.count <= 0 and item in self.player.inventory.items:
+                self.player.inventory.items.remove(item)
+
+            self.emergency_escapes += 1
+            self.town_visits += 1
+            old_map = self.player.map_id
+            # Teleport to Talking Island town center (GetBackRestartTable: 32599, 32931, map 0)
+            self.player.map_id = 0
+            self.player.x = 32599
+            self.player.y = 32931
+            self.active_target = None
+            if old_map != 0:
+                self.maps_traversed += 1
+            self._sync_map_grid()
+            self._log(f"ITEM_USE: Player used {item.name} -> Teleported to Town ({self.player.x}, {self.player.y}) Map 0")
+            self.scheduler.schedule_after(600, self.step, name="item_action_gate")
+        else:
+            self._log(f"ITEM_USE: Used item {item.name}")
+            self.scheduler.schedule_after(600, self.step, name="item_action_gate")
+
+    def _execute_transition_map(self, portal_pos: Position) -> None:
+        """
+        Cross-map portal transition between Talking Island Surface (Map 0)
+        and TI Dungeon 1F (Map 1).
+        Canonical transitions from dungeon.sql:
+          - Map 0 (32477, 32851) -> Map 1 (32669, 32802) (dungeon.sql: record 2)
+          - Map 1 (32669, 32802) -> Map 0 (32477, 32853) (dungeon.sql: record 97)
+        """
+        if self.player.map_id == 0:
+            # Entering TI Dungeon 1F
+            self.player.map_id = 1
+            self.player.x = 32669
+            self.player.y = 32802
+            self.maps_traversed += 1
+            self.hunt_cycles += 1
+            self._sync_map_grid()
+            self._log(f"PORTAL_TRANSITION: Entered TI Dungeon 1F at ({self.player.x}, {self.player.y}) Map 1")
+        elif self.player.map_id == 1:
+            # Exiting to TI Surface
+            self.player.map_id = 0
+            self.player.x = 32477
+            self.player.y = 32853
+            self.maps_traversed += 1
+            self.town_visits += 1
+            self._sync_map_grid()
+            self._log(f"PORTAL_TRANSITION: Exited to Surface at ({self.player.x}, {self.player.y}) Map 0")
+
+        self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="portal_action_gate")
+
+    def _execute_buy_supply(self, target: Any) -> None:
+        """
+        Autonomous town resupply interaction at Pandora's Shop (NPC 3).
+        Purchases configured items up to target_quantity.
+        Handles partial funds and logs itemized trade breakdown.
+        """
+        from ..npc import PANDORA_SHOP
+        shop = PANDORA_SHOP
+
+        # Verify proximity (Chebyshev distance <= 2)
+        dist = max(abs(self.player.x - shop.pos.x), abs(self.player.y - shop.pos.y))
+        if self.player.map_id != shop.pos.map_id or dist > 2:
+            self._log(f"[SHOP] CANNOT_INTERACT: Out of range from {shop.name} (dist={dist})")
+            self._execute_move_step(shop.pos)
+            return
+
+        self._log(f"[SHOP] INTERACTION: Opened {shop.name} at ({shop.pos.x}, {shop.pos.y}) Map {shop.pos.map_id}")
+        purchased_any = False
+
+        resupply_profile = self.policy.config.resupply
+        items_to_resupply = sorted([i for i in resupply_profile.items if i.enabled], key=lambda i: i.priority, reverse=True)
+
+        for r_item in items_to_resupply:
+            current_count = sum(
+                i.count for i in self.player.inventory.items if (i.item_id == r_item.item_id or i.name == r_item.item)
+            )
+            needed = max(0, r_item.target_quantity - current_count)
+            if needed <= 0:
+                continue
+
+            if r_item.item_id not in shop.catalog:
+                self._log(f"[SHOP] ITEM_NOT_IN_SHOP: {r_item.item} (ID: {r_item.item_id}) not sold by {shop.name}")
+                continue
+
+            shop_entry = shop.catalog[r_item.item_id]
+            price = shop_entry.price
+
+            # Check player adena
+            adena_item = next(
+                (i for i in self.player.inventory.items if i.name == "Adena" or i.item_id == 40308),
+                None
+            )
+            adena_balance = adena_item.count if adena_item else 0
+
+            if adena_balance < price:
+                self._log(f"[SHOP] INSUFFICIENT_FUNDS: Cannot afford {r_item.item} (price={price}, adena={adena_balance})")
+                continue
+
+            affordable = min(needed, adena_balance // price)
+            cost = affordable * price
+            adena_before = adena_balance
+            success, msg = shop.buy_item(self.player, r_item.item_id, count=affordable, check_proximity=False)
+
+            if success:
+                purchased_any = True
+                self.shop_purchases += 1
+                self.adena_spent += cost
+                adena_after = adena_item.count if adena_item in self.player.inventory.items else 0
+                if affordable < needed:
+                    self._log(f"[SHOP] PARTIAL_RESUPPLY: {r_item.item} current={current_count} target={r_item.target_quantity} price={price} buy={affordable} cost={cost} adena_before={adena_before} adena_after={adena_after}")
+                else:
+                    self._log(f"[SHOP] {r_item.item} current={current_count} target={r_item.target_quantity} price={price} buy={affordable} cost={cost} adena_before={adena_before} adena_after={adena_after}")
+
+        if purchased_any:
+            self.resupply_cycles += 1
+
+        # Resupply finished -> transition state to TRAVELING_TO_HUNT
+        self.policy.resupply_attempted_this_visit = True
+        self.state = BotState.TRAVELING_TO_HUNT
+        self.scheduler.schedule_after(800, self.step, name="shop_action_gate")
 
     def _execute_cast_skill(self, action: BotAction) -> None:
         """
@@ -678,5 +846,15 @@ class HeadlessBot:
             "damage_dealt": self.total_damage_dealt,
             "damage_taken": self.total_damage_taken,
             "items_looted": [f"{item.name} x{item.count}" for item in self.items_looted],
+            "potions_consumed": self.potions_consumed,
+            "emergency_returns": self.emergency_escapes,
+            "town_visits": self.town_visits,
+            "shop_purchases": self.shop_purchases,
+            "adena_earned": self.adena_earned,
+            "adena_spent": self.adena_spent,
+            "loot_picked": len(self.items_looted),
+            "maps_traversed": self.maps_traversed,
+            "hunt_cycles": self.hunt_cycles,
+            "resupply_cycles": self.resupply_cycles,
             "trace_log": self.trace_log,
         }

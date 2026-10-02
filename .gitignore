@@ -11,3 +11,4 @@ TW13081901.txt
 *.sqlite
 *.sqlite3
 scratch/
+*.jsonl

@@ -1,0 +1,88 @@
+{
+  "potion_rules": [
+    {
+      "enabled": true,
+      "threshold_mode": "HP_PERCENT",
+      "threshold": 30.0,
+      "item": "Red Potion",
+      "item_id": 104,
+      "priority": 100
+    },
+    {
+      "enabled": true,
+      "threshold_mode": "HP_PERCENT",
+      "threshold": 15.0,
+      "item": "Orange Potion",
+      "item_id": 103,
+      "priority": 200
+    }
+  ],
+  "emergency_rules": [
+    {
+      "enabled": true,
+      "condition": {
+        "type": "HP_PERCENT",
+        "operator": "LE",
+        "value": 10.0
+      },
+      "action": {
+        "type": "USE_ITEM",
+        "item": "Escape Scroll",
+        "item_id": 139
+      },
+      "priority": 100
+    }
+  ],
+  "return_to_town": {
+    "enabled": true,
+    "return_method": "USE_ESCAPE_ITEM",
+    "escape_item": "Escape Scroll",
+    "escape_item_id": 139,
+    "triggers": [
+      {
+        "type": "LOW_POTION",
+        "item": "Red Potion",
+        "item_id": 104,
+        "threshold": 5
+      }
+    ]
+  },
+  "resupply": {
+    "enabled": true,
+    "shop_npc_id": 3,
+    "items": [
+      {
+        "enabled": true,
+        "item": "Red Potion",
+        "item_id": 104,
+        "target_quantity": 50,
+        "priority": 100
+      },
+      {
+        "enabled": true,
+        "item": "Green Potion",
+        "item_id": 108,
+        "target_quantity": 10,
+        "priority": 80
+      },
+      {
+        "enabled": true,
+        "item": "Escape Scroll",
+        "item_id": 139,
+        "target_quantity": 5,
+        "priority": 60
+      }
+    ]
+  },
+  "hunting": {
+    "destination": {
+      "name": "ti_dungeon_1f",
+      "map_id": 1,
+      "target_x": 32671,
+      "target_y": 32804,
+      "portal_map_id": 0,
+      "portal_x": 32477,
+      "portal_y": 32851
+    }
+  }
+}

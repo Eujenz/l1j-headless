@@ -10,7 +10,7 @@ from native_engine.movement import MovementEngine, can_move, HEADING_DELTA
 from native_engine.events import DomainEvent, DestinationReached
 
 class AStarPlanner:
-    LIMIT_LOOP = 200
+    LIMIT_LOOP = 2000
 
     @staticmethod
     def heuristic(x: int, y: int, tx: int, ty: int) -> int:

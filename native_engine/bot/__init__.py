@@ -11,6 +11,24 @@ from .controller import HeadlessBot
 from .policy import BotPolicy, BotState, BotAction, BotActionType
 from .perception import PerceptionSystem, PerceptionSnapshot
 from .drop import DropSystem, GroundDrop
+from .config import (
+    AutonomousConfig,
+    PotionRule,
+    PotionThresholdMode,
+    EmergencyCondition,
+    EmergencyConditionType,
+    EmergencyOperator,
+    EmergencyAction,
+    EmergencyActionRule,
+    ReturnTrigger,
+    ReturnTriggerType,
+    ReturnMethod,
+    ReturnToTownPolicy,
+    ResupplyItem,
+    ResupplyProfile,
+    HuntingDestination,
+    HuntingPolicy,
+)
 
 __all__ = [
     "HeadlessBot",
@@ -22,4 +40,21 @@ __all__ = [
     "PerceptionSnapshot",
     "DropSystem",
     "GroundDrop",
+    "AutonomousConfig",
+    "PotionRule",
+    "PotionThresholdMode",
+    "EmergencyCondition",
+    "EmergencyConditionType",
+    "EmergencyOperator",
+    "EmergencyAction",
+    "EmergencyActionRule",
+    "ReturnTrigger",
+    "ReturnTriggerType",
+    "ReturnMethod",
+    "ReturnToTownPolicy",
+    "ResupplyItem",
+    "ResupplyProfile",
+    "HuntingDestination",
+    "HuntingPolicy",
 ]
+

@@ -35,6 +35,7 @@ class GroundDrop:
 CANONICAL_DROP_TABLE: Dict[int, List[CanonicalDropRecord]] = {
     # 1: 漂浮之眼 (Floating Eye)
     1: [
+        CanonicalDropRecord(40308, "Adena", 20, 60, 6000),      # 60%
         CanonicalDropRecord(331, "漂浮之眼肉", 1, 1, 3000),      # 30%
         CanonicalDropRecord(100, "藍色藥水", 1, 1, 250),        # 2.5%
         CanonicalDropRecord(140, "魔法寶石", 1, 1, 300),        # 3.0%
@@ -53,6 +54,7 @@ CANONICAL_DROP_TABLE: Dict[int, List[CanonicalDropRecord]] = {
     ],
     # 4: 狼人 (Werewolf)
     4: [
+        CanonicalDropRecord(40308, "Adena", 50, 150, 7500),    # 75%
         CanonicalDropRecord(12, "肉", 1, 1, 2500),             # 25%
         CanonicalDropRecord(27, "木棒", 1, 1, 500),            # 5%
         CanonicalDropRecord(32, "弗萊爾", 1, 1, 500),          # 5%
@@ -65,6 +67,7 @@ CANONICAL_DROP_TABLE: Dict[int, List[CanonicalDropRecord]] = {
     ],
     # 6: 高侖石頭怪 (Stone Golem)
     6: [
+        CanonicalDropRecord(40308, "Adena", 80, 200, 8000),    # 80%
         CanonicalDropRecord(2, "斧", 1, 1, 500),               # 5%
         CanonicalDropRecord(8, "亞連", 1, 1, 500),             # 5%
         CanonicalDropRecord(27, "木棒", 1, 1, 500),            # 5%
@@ -75,6 +78,7 @@ CANONICAL_DROP_TABLE: Dict[int, List[CanonicalDropRecord]] = {
     ],
     # 8: 人形僵屍 (Zombie)
     8: [
+        CanonicalDropRecord(40308, "Adena", 40, 120, 7000),    # 70%
         CanonicalDropRecord(285, "金屬塊", 1, 1, 2500),        # 25%
         CanonicalDropRecord(104, "紅色藥水", 1, 1, 1000),      # 10%
         CanonicalDropRecord(102, "綠色藥水", 1, 1, 500),        # 5%

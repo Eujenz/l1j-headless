@@ -74,6 +74,11 @@ class TestCertifiedScenarios(unittest.TestCase):
         self.assertEqual(res.returncode, 0, f"Scenario 007 demo failed:\n{res.stdout}\n{res.stderr}")
         self.assertIn("SCENARIO 007 DEMO COMPLETED", res.stdout)
 
+    def test_scenario_008_autonomous_hunting(self):
+        res = subprocess.run([sys.executable, "scenario_008_configurable_autonomous_hunting.py", "--duration", "600000"], capture_output=True, text=True, encoding="utf-8")
+        self.assertEqual(res.returncode, 0, f"Scenario 008 failed:\n{res.stdout}\n{res.stderr}")
+        self.assertIn("SCENARIO 008 OVERALL STATUS: PASS", res.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
