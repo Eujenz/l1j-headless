@@ -48,62 +48,57 @@ Differential Replay
 
 ---
 
-## Product Vision
+## Product Definition & Vision
 
-The long-term vision is to build a headless Lineage 1 world runtime that executes autonomously without requiring original client or server binaries:
+> **L1J Headless = 一個沒有 Legacy Client / JVM 的 Native L1J 1.82 玩家；唯一額外能力，是玩家可以透過設定把原本手動進行的狩獵操作自動化。**
 
+本專案的核心目標：在不依賴 Legacy Java Server、Legacy Client、JVM、GUI Client、Legacy MySQL Runtime、Live Network Protocol 的情況下，讓 Native Headless Player 以盡可能接近真實 L1J 1.82 玩家操作、邏輯與遊玩體驗的方式進行遊戲。
+
+概念上等同：
 ```text
-Player Goal
-    ↓
-Automation Agent (Future)
-    ↓
-World Observation
-    ↓
-World Navigation (Future)
-    ↓
-Local Navigation
-    ↓
-Movement / Action
-    ↓
-World State
+Real L1J Player + Legacy-compatible helper / bot configuration
 ```
 
-For instance, an automation agent could process high-level goals:
-> *"Head to northern Talking Island to hunt monsters. If no targets are found, navigate to Silver Knight Town. Return to town if HP drops below safety threshold."*
-
-The autonomous runtime handles the complete loop:
-`Observation` → `Decision` → `Navigation` → `Transition` → `Movement` → `Combat` → `Loot` → `Return`.
-
-*(Note: This represents the long-term vision. Not all features are currently implemented.)*
+而不是 Generic AI Agent，也不是 Game Strategy Optimizer。
 
 ---
 
-## Architecture
+## Four-Layer Architecture
 
 ```text
-                    Headless L1 World
-                           │
-             ┌─────────────┴─────────────┐
-             │                           │
-         World Rules                 Automation (Future)
-             │                           │
-       ┌─────┴─────┐               Planner / Agent
-       │           │
-   Map Geometry  Transition
-       │           │
-       └─────┬─────┘
-             ↓
-         World State
-             ↓
-      Text UI / API / Agent (Future)
+Legacy L1J Behavior (Eujenz/182c)
+        ↓
+Native L1J World
+        ↓
+Headless Player
+        ↓
+Player Operation (Action Model)
+        ↓
+Configurable Automation (Helper / Policy)
+        ↓
+Continuous Gameplay
 ```
 
-- **Local Navigation**: Resolves same-map movement, static obstacle avoidance, and canonical 8-direction pathfinding.
-- **Cross-Map Transition**: Evaluates spatial triggers (portals, stairs, teleports) and executes atomic state handoffs between discrete map topologies.
-- **World Route Planning (Future)**: Composes cross-map transitions and local A* segments into end-to-end multi-map routes.
-- **Wire Codec (`native_engine/codec.py`)**: Serves strictly as a wire serialization compatibility primitive for conformance testing (e.g. Scenario 001 packet layout validation). It is not a live network socket stack or client protocol server.
+### Layer 1 — Legacy Evidence
+Canonical 參考：[`Eujenz/182c`](https://github.com/Eujenz/182c)。所有遊戲規則、數值、動作時序、掉落率、商店資料均優先從此層取得與驗證。
 
-For further architectural details, see [Architecture Overview](docs/architecture.md).
+### Layer 2 — Native L1J World
+純 Python / In-Process 忠實表達 L1J 1.82 世界規則：地圖與阻擋 (Map 0/1)、怪物 AI 與刷新、戰鬥計算與武器速度、背包與道具、藥水機制與冷卻、NPC 商店交易、經驗值與等級、死亡與回城、虛擬時間排程。不包含任何玩家個人偏好。
+
+### Layer 3 — Player Operation
+定義真實玩家能執行的操作集合（Player Action Model，不是 AI）：
+`MOVE`, `ATTACK`, `SELECT_TARGET`, `CAST_SKILL`, `USE_ITEM`, `LOOT`, `TALK_NPC`, `BUY`, `SELL`, `TRAVEL`, `TELEPORT`, `EQUIP`, `UNEQUIP`。
+
+### Layer 4 — Configurable Automation
+玩家配置哪些 Player Operation 要由系統自動執行（如參考 `r0ptik/L1J-3.8-launcher` 式經典外掛/輔助工具設定）：
+- 喝水規則（HP 門檻、藥水種類、冷卻、優先級）
+- 緊急逃脫（危急血量使用回城卷軸）
+- 回城補給（低藥水、過重觸發回城、指定商店 NPC、採購目標數量）
+- 狩獵目標（獵場地圖、巡邏範圍）
+
+> **Automation ≠ Optimization**：系統不負責尋找最高 EXP、最高利潤或最佳化喝水。玩家配置什麼，Native World 就忠實執行什麼。入不敷出、死亡、虧損皆為完全合法的真實遊戲結果。
+
+For further architectural details, see [Product Direction](docs/architecture/product_direction_headless_player.md) and [Architecture Overview](docs/architecture.md).
 
 ---
 
@@ -289,15 +284,12 @@ python -m unittest discover tests
 - [x] **Scenario 004**: Canonical Real Map Import
 - [x] **Scenario 005**: Real Multi-Map Route Planning
 - [x] **Scenario 006**: Playable MVP (Hunting / Combat / Character State)
-- [ ] Multi-Actor World Simulation
-- [ ] NPC & Object Interaction
-- [ ] Items & Equipment Systems
-- [ ] Spells & Skills
-- [ ] Quests & Game Progression
-- [ ] Economy & Trading
-- [ ] Persistent World State
-- [ ] Autonomous Goal Planner / Agent
-- [ ] Text UI / CLI & Developer API
+- [x] **Scenario 007**: Multi-Actor Persistent Native World (10-min Virtual Run)
+- [x] **Scenario 008**: Configurable Autonomous Hunting & Town Resupply Cycle (30-min Virtual Run)
+- [ ] Real Player Character Initialization (Stats, Starting Gear, Classes)
+- [ ] Real Player Equipment & Inventory Management (Equip/Unequip AC/DMG)
+- [ ] Speed Buff Potions (Green Potion 2x speed, Bravery Potion 3x speed)
+- [ ] Town Warehouse Storage & Weight Economics (Doruru / Elf Warehouse)
 
 ---
 
