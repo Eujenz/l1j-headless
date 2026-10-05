@@ -82,6 +82,32 @@ class PlayerViewModel:
         return self.snapshot.equipped_weapon_name
 
     @property
+    def stats_str(self) -> str:
+        s = self.snapshot
+        return f"力:{s.str} 敏:{s.dex} 體:{s.con} 智:{s.int} 精:{s.wis} 魅:{s.cha}"
+
+    @property
+    def ac_str(self) -> str:
+        return f"AC: {self.snapshot.ac}"
+
+    @property
+    def mr_str(self) -> str:
+        return f"MR: {self.snapshot.mr}%"
+
+    @property
+    def weight_str(self) -> str:
+        s = self.snapshot
+        return f"負重: {s.weight_pct}% ({s.current_weight}/{s.max_weight})"
+
+    @property
+    def weight_ratio(self) -> float:
+        return max(0.0, min(1.0, self.snapshot.weight_pct / 100.0))
+
+    @property
+    def equipped_slots(self) -> Dict[str, str]:
+        return self.snapshot.equipped_slots
+
+    @property
     def is_helper_paused(self) -> bool:
         return self.snapshot.helper_paused
 
@@ -94,6 +120,12 @@ class PlayerViewModel:
     # ---------------------------------------------------------------------------
     # User Command Actions
     # ---------------------------------------------------------------------------
+
+    def manual_toggle_equip(self, item_id: int) -> bool:
+        """Toggles equipment or uses consumable (C_ItemClick.java)."""
+        res = self.runtime.manual_toggle_equip(item_id)
+        self.refresh_snapshot()
+        return res
 
     def toggle_helper_pause(self) -> bool:
         """Toggles between paused manual mode and active automation."""

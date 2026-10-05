@@ -396,17 +396,31 @@ class HeadlessBot:
 
     def _execute_equip(self, item_or_weapon: Any) -> None:
         if isinstance(item_or_weapon, Weapon):
-            self.player.equipped_weapon = item_or_weapon
+            self.player.equip_item(item_or_weapon)
             self.player.attack_speed_ms = get_pc_action_interval(self.player.gfx, item_or_weapon)
             self._log(f"[PLAYER] EQUIP Weapon: {item_or_weapon.name} (AtkSpeed: {self.player.attack_speed_ms}ms)")
+        elif hasattr(item_or_weapon, "equip_slot") and item_or_weapon.equip_slot >= 0:
+            self.player.equip_item(item_or_weapon)
+            if item_or_weapon.equip_slot == 11:
+                self.player.attack_speed_ms = get_pc_action_interval(self.player.gfx, item_or_weapon)
+            self._log(f"[PLAYER] EQUIP Gear: {item_or_weapon.name} (Slot: {item_or_weapon.equip_slot}, AC: {self.player.total_ac})")
         self._player_busy_until = self.clock.now() + 200
         self.scheduler.schedule_after(200, self.step, name="equip_action_gate")
 
     def _execute_unequip(self, item_or_weapon: Any) -> None:
-        old_w = self.player.equipped_weapon
-        self.player.equipped_weapon = None
-        self.player.attack_speed_ms = get_pc_action_interval(self.player.gfx, None)
-        self._log(f"[PLAYER] UNEQUIP Weapon: {old_w.name if old_w else 'None'} (AtkSpeed: {self.player.attack_speed_ms}ms)")
+        if isinstance(item_or_weapon, Weapon) or getattr(item_or_weapon, "equip_slot", -1) == 11:
+            old_w = self.player.equipped_weapon
+            self.player.unequip_slot(11)
+            self.player.attack_speed_ms = get_pc_action_interval(self.player.gfx, None)
+            self._log(f"[PLAYER] UNEQUIP Weapon: {old_w.name if old_w else 'None'} (AtkSpeed: {self.player.attack_speed_ms}ms)")
+        elif hasattr(item_or_weapon, "equip_slot") and item_or_weapon.equip_slot >= 0:
+            self.player.unequip_slot(item_or_weapon.equip_slot)
+            self._log(f"[PLAYER] UNEQUIP Gear: {item_or_weapon.name} (Slot: {item_or_weapon.equip_slot}, AC: {self.player.total_ac})")
+        elif isinstance(item_or_weapon, int):
+            removed = self.player.unequip_slot(item_or_weapon)
+            if item_or_weapon == 11:
+                self.player.attack_speed_ms = get_pc_action_interval(self.player.gfx, None)
+            self._log(f"[PLAYER] UNEQUIP Slot {item_or_weapon}: {removed.name if removed else 'None'} (AC: {self.player.total_ac})")
         self._player_busy_until = self.clock.now() + 200
         self.scheduler.schedule_after(200, self.step, name="unequip_action_gate")
 

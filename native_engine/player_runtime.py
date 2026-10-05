@@ -28,7 +28,7 @@ from .bot import (
     BotState,
 )
 from .clock import RealTimeClock, VirtualClock, BaseClock
-from .model import Actor, Monster, Position, Item, Weapon
+from .model import Actor, Monster, Position, Item, Weapon, SLOT_NAMES
 from .player_operation import PlayerOperation, PlayerOperationType
 from .session import GameSession
 from .temporal import Scheduler
@@ -68,6 +68,19 @@ class PlayerRuntimeSnapshot:
     ground_drops: List[Dict[str, Any]] = field(default_factory=list)
     exp_base: int = 0      # cumulative EXP at start of current level
     exp_next: int = 0      # cumulative EXP needed for next level (0 = max)
+    str: int = 16
+    dex: int = 12
+    con: int = 14
+    int: int = 8
+    wis: int = 9
+    cha: int = 12
+    ac: int = 10
+    mr: int = 0
+    weight_pct: int = 0
+    current_weight: int = 0
+    max_weight: int = 1000
+    weight_30_bar: int = 0
+    equipped_slots: Dict[str, str] = field(default_factory=dict)
 
 class HeadlessPlayerRuntime:
     """
@@ -357,6 +370,30 @@ class HeadlessPlayerRuntime:
                 return True
             return False
 
+    def manual_toggle_equip(self, item_id: int) -> bool:
+        """
+        Toggles equip/unequip on equipment or uses consumable (C_ItemClick.java).
+        """
+        with self.lock:
+            if self.player.equipped_weapon and self.player.equipped_weapon.item_id == item_id:
+                op = PlayerOperation(PlayerOperationType.UNEQUIP, target=self.player.equipped_weapon, detail="Manual Unequip Weapon")
+                self.bot.enqueue_manual_operation(op)
+                return True
+
+            item = next((i for i in self.player.inventory.items if i.item_id == item_id and i.count > 0), None)
+            if not item:
+                return False
+
+            if getattr(item, "is_equipped", False):
+                op = PlayerOperation(PlayerOperationType.UNEQUIP, target=item, detail=f"Manual Unequip: {item.name}")
+            elif getattr(item, "type1", 0) in (1, 2) or getattr(item, "equip_slot", -1) >= 0:
+                op = PlayerOperation(PlayerOperationType.EQUIP, target=item, detail=f"Manual Equip: {item.name}")
+            else:
+                op = PlayerOperation(PlayerOperationType.USE_ITEM, target=item, detail=f"Manual Use: {item.name}")
+
+            self.bot.enqueue_manual_operation(op)
+            return True
+
     def manual_return_town(self) -> None:
         """
         Issues manual RETURN_TOWN.
@@ -462,13 +499,27 @@ class HeadlessPlayerRuntime:
                     "y": at.y,
                 }
 
+            # Equipped slots projection (Legacy 14 slots)
+            equipped_slots_proj = {}
+            for slot_id, slot_name in SLOT_NAMES.items():
+                eq = p.equipped_slots.get(slot_id) if hasattr(p, "equipped_slots") else None
+                if eq:
+                    en_prefix = f"+{getattr(eq, 'enchant', 0)} " if getattr(eq, 'enchant', 0) > 0 else ""
+                    equipped_slots_proj[slot_name] = f"{en_prefix}{eq.name}"
+                else:
+                    equipped_slots_proj[slot_name] = "無"
+
             # Inventory projection
             inv_proj = [
                 {
                     "item_id": i.item_id,
                     "name": i.name,
                     "count": i.count,
-                    "is_equipped": bool(p.equipped_weapon and p.equipped_weapon.item_id == i.item_id),
+                    "type1": getattr(i, "type1", 0),
+                    "equip_slot": getattr(i, "equip_slot", -1),
+                    "weight": getattr(i, "weight", 10),
+                    "enchant": getattr(i, "enchant", 0),
+                    "is_equipped": getattr(i, "is_equipped", False) or bool(p.equipped_weapon and p.equipped_weapon.item_id == i.item_id),
                 }
                 for i in p.inventory.items
             ]
@@ -527,6 +578,19 @@ class HeadlessPlayerRuntime:
                 ][:40],
                 exp_base=self.session.progression.get_exp_for_level(p.level),
                 exp_next=self.session.progression.next_level_exp(p) or 0,
+                str=getattr(p, "total_str", p.str),
+                dex=getattr(p, "total_dex", p.dex),
+                con=getattr(p, "total_con", p.con),
+                int=getattr(p, "total_int", p.int),
+                wis=getattr(p, "total_wis", p.wis),
+                cha=getattr(p, "total_cha", p.cha),
+                ac=getattr(p, "total_ac", p.ac),
+                mr=getattr(p, "total_mr", 0),
+                weight_pct=getattr(p, "weight_pct", 0),
+                current_weight=getattr(p, "current_weight", 0),
+                max_weight=getattr(p, "max_weight", 1000),
+                weight_30_bar=getattr(p, "weight_30_bar", 0),
+                equipped_slots=equipped_slots_proj,
             )
 
     def subscribe(self, callback: Callable[[PlayerRuntimeSnapshot], None]) -> None:

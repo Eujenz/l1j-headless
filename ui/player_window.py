@@ -241,6 +241,28 @@ class PlayerWindow:
         self.weapon_lbl = ttk.Label(hud, text="武器：長劍", style="Value.TLabel")
         self.weapon_lbl.pack(anchor=tk.W)
 
+        # Defense & Resistances
+        self.defense_lbl = ttk.Label(hud, text="AC: 10   MR: 0%", style="Value.TLabel")
+        self.defense_lbl.pack(anchor=tk.W)
+
+        # Six Core Stats
+        self.stats_lbl = ttk.Label(hud, text="力:16 敏:12 體:14 智:8 精:9 魅:12",
+                                   style="Value.TLabel", font=("Consolas", 8), foreground="#aaccff")
+        self.stats_lbl.pack(anchor=tk.W, pady=(2, 0))
+
+        # Weight Row
+        w_row = ttk.Frame(hud, style="Panel.TFrame")
+        w_row.pack(fill=tk.X, pady=(2, 2))
+        ttk.Label(w_row, text="負重", width=4, style="Section.TLabel").pack(side=tk.LEFT)
+        self.weight_canvas = tk.Canvas(w_row, height=8, bg="#111122", highlightthickness=0)
+        self.weight_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self.weight_text_lbl = ttk.Label(w_row, text="0%", width=9, style="Value.TLabel")
+        self.weight_text_lbl.pack(side=tk.LEFT)
+
+        # Character detail / equip window button
+        ttk.Button(hud, text="人物裝備詳細", command=self._show_character_status_dialog,
+                   style="Action.TButton").pack(anchor=tk.W, pady=(4, 0))
+
         # ─ Current Target ────────────────────────────────────────────────────
         tgt = ttk.LabelFrame(parent, text="目前目標", style="Panel.TLabelframe", padding=6)
         tgt.pack(fill=tk.X, pady=(0, 6))
@@ -293,11 +315,14 @@ class PlayerWindow:
             self._module_labels[key] = dot
 
         # ─ Inventory ─────────────────────────────────────────────────────────
-        inv_frame = ttk.LabelFrame(parent, text="背包", style="Panel.TLabelframe", padding=4)
+        inv_frame = ttk.LabelFrame(parent, text="背包 (雙擊使用/穿脫)", style="Panel.TLabelframe", padding=4)
         inv_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
 
+        list_container = ttk.Frame(inv_frame, style="Panel.TFrame")
+        list_container.pack(fill=tk.BOTH, expand=True)
+
         self.inv_listbox = tk.Listbox(
-            inv_frame, height=6,
+            list_container, height=6,
             font=("Consolas", 9),
             bg="#0d0d1e", fg="#ccccee",
             selectbackground="#334466",
@@ -305,11 +330,19 @@ class PlayerWindow:
             activestyle="none",
         )
         self.inv_listbox.pack(fill=tk.BOTH, expand=True, side=tk.LEFT)
-        inv_scroll = ttk.Scrollbar(inv_frame, orient=tk.VERTICAL,
+        inv_scroll = ttk.Scrollbar(list_container, orient=tk.VERTICAL,
                                    command=self.inv_listbox.yview)
         inv_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.inv_listbox.config(yscrollcommand=inv_scroll.set)
         self.inv_listbox.bind("<Double-Button-1>", self._on_inv_double_click)
+        self.inv_listbox.bind("<Return>", self._on_inv_double_click)
+
+        inv_btn_row = ttk.Frame(inv_frame, style="Panel.TFrame")
+        inv_btn_row.pack(fill=tk.X, pady=(4, 0))
+        ttk.Button(inv_btn_row, text="使用 / 穿脫", command=self._on_inv_double_click,
+                   style="Action.TButton").pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
+        ttk.Button(inv_btn_row, text="裝備總覽", command=self._show_character_status_dialog,
+                   style="Action.TButton").pack(side=tk.RIGHT, padx=(2, 0))
 
     def _build_action_bar(self, parent) -> None:
         """Build the action bar with Pause, attack, potion, return town, D-pad."""
@@ -501,6 +534,18 @@ class PlayerWindow:
         # Weapon
         self.weapon_lbl.config(text=f"武器：{_zh_weapon(snap.equipped_weapon_name)}")
 
+        # Stats
+        self.stats_lbl.config(text=f"力:{snap.str} 敏:{snap.dex} 體:{snap.con} 智:{snap.int} 精:{snap.wis} 魅:{snap.cha}")
+
+        # Defense & Resistances
+        self.defense_lbl.config(text=f"AC: {snap.ac}   MR: {snap.mr}%")
+
+        # Weight bar
+        w_ratio = min(1.0, snap.weight_pct / 100.0)
+        w_color = "#00cc44" if snap.weight_pct < 50 else ("#ffaa00" if snap.weight_pct < 83 else "#ff2222")
+        self._draw_bar(self.weight_canvas, w_ratio, w_color)
+        self.weight_text_lbl.config(text=f"{snap.weight_pct}% ({snap.weight_30_bar}/29)")
+
         # Target
         if snap.active_target:
             t = snap.active_target
@@ -564,19 +609,20 @@ class PlayerWindow:
             canvas.create_rectangle(0, 0, fill_w, h, fill=color, outline="")
 
     def _update_inventory(self, inventory: list) -> None:
-        """Diff-update inventory listbox."""
-        # Simple strategy: rebuild if item count or any name changed
+        """Diff-update inventory listbox with [E] equip tag and enchants."""
         current_items = [
-            (i["item_id"], i["count"]) for i in inventory
+            (i["item_id"], i["count"], i.get("is_equipped", False)) for i in inventory
         ]
         if hasattr(self, "_last_inv_items") and self._last_inv_items == current_items:
             return
         self._last_inv_items = current_items
         self.inv_listbox.delete(0, tk.END)
         for item in inventory:
-            eq_str = "◆ " if item.get("is_equipped") else "   "
+            eq_str = "[E] " if item.get("is_equipped") else "    "
             name_zh = _zh_item(item["name"])
-            self.inv_listbox.insert(tk.END, f"{eq_str}{name_zh:<12} x{item['count']}")
+            en = item.get("enchant", 0)
+            en_str = f"+{en} " if en > 0 else ""
+            self.inv_listbox.insert(tk.END, f"{eq_str}{en_str}{name_zh:<12} x{item['count']}")
 
     def _update_monsters(self, monsters: list, active_target) -> None:
         """Diff-update monster listbox if UIDs changed."""
@@ -696,14 +742,84 @@ class PlayerWindow:
         self.vm.manual_attack()
 
     def _on_inv_double_click(self, event=None) -> None:
-        """Use item on double click."""
+        """Toggle equip or use item on double click (aligned with C_ItemClick.java)."""
         sel = self.inv_listbox.curselection()
         if sel:
             snap = self.vm.snapshot
             idx = sel[0]
             if idx < len(snap.inventory):
                 item = snap.inventory[idx]
-                self.vm.manual_use_item(item["item_id"])
+                self.vm.manual_toggle_equip(item["item_id"])
+
+    def _show_character_status_dialog(self) -> None:
+        """Displays character status, six core stats, combat attributes and 14 equipment slots."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("角色狀態與裝備")
+        dialog.geometry("480x520")
+        dialog.minsize(440, 480)
+        dialog.transient(self.root)
+        dialog.configure(bg="#0f0f1a")
+
+        snap = self.vm.snapshot
+        class_zh = {1: "騎士", 2: "魔法師", 3: "精靈"}.get(snap.class_type, "冒險者")
+
+        # Top summary header
+        top_frame = tk.Frame(dialog, bg="#1a1a2e", padx=12, pady=10)
+        top_frame.pack(fill=tk.X, padx=10, pady=8)
+
+        tk.Label(top_frame, text=f"Lv {snap.level} {class_zh}", font=("Helvetica", 13, "bold"),
+                 bg="#1a1a2e", fg="#ffffaa").pack(anchor=tk.W)
+        tk.Label(top_frame, text=f"HP: {snap.hp} / {snap.max_hp}     MP: {snap.mp} / {snap.max_mp}",
+                 font=("Consolas", 10), bg="#1a1a2e", fg="#aaccff").pack(anchor=tk.W, pady=(4, 0))
+        tk.Label(top_frame, text=f"防禦力 (AC): {snap.ac}     魔法防禦 (MR): {snap.mr}%",
+                 font=("Consolas", 10), bg="#1a1a2e", fg="#88ffaa").pack(anchor=tk.W, pady=(2, 0))
+        tk.Label(top_frame, text=f"負重狀態: {snap.current_weight} / {snap.max_weight} ({snap.weight_pct}%, 刻度 {snap.weight_30_bar}/29)",
+                 font=("Consolas", 10), bg="#1a1a2e", fg="#ffaa88").pack(anchor=tk.W, pady=(2, 0))
+
+        # Six Core Stats Frame
+        stats_frame = tk.LabelFrame(dialog, text="六大基礎能力值", bg="#0f0f1a", fg="#ccccff",
+                                    font=("Helvetica", 10, "bold"), padx=10, pady=6)
+        stats_frame.pack(fill=tk.X, padx=10, pady=4)
+
+        stats_grid = [
+            ("力量 (STR)", snap.str, 0, 0),
+            ("敏捷 (DEX)", snap.dex, 0, 1),
+            ("體質 (CON)", snap.con, 0, 2),
+            ("智力 (INT)", snap.int, 1, 0),
+            ("精神 (WIS)", snap.wis, 1, 1),
+            ("魅力 (CHA)", snap.cha, 1, 2),
+        ]
+        for name, val, r, c in stats_grid:
+            tk.Label(stats_frame, text=f"{name}: {val:>2}", font=("Consolas", 10),
+                     bg="#0f0f1a", fg="#ffffff", padx=8, pady=3).grid(row=r, column=c, sticky="w")
+
+        # 14 Canonical Equipment Slots Frame
+        eq_frame = tk.LabelFrame(dialog, text="裝備欄位 (Legacy 14 Slots)", bg="#0f0f1a", fg="#ccccff",
+                                 font=("Helvetica", 10, "bold"), padx=10, pady=6)
+        eq_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=6)
+
+        # Scrollable equipment list
+        eq_list = tk.Listbox(
+            eq_frame, font=("Consolas", 10),
+            bg="#0d0d1e", fg="#e0e0ff",
+            selectbackground="#223355", selectforeground="#ffffff",
+            activestyle="none", height=14
+        )
+        eq_scroll = ttk.Scrollbar(eq_frame, orient=tk.VERTICAL, command=eq_list.yview)
+        eq_list.configure(yscrollcommand=eq_scroll.set)
+        eq_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        eq_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+        slots = getattr(snap, "equipped_slots", {})
+        for slot_name, item_str in slots.items():
+            color_mark = "●" if item_str != "無" else "○"
+            eq_list.insert(tk.END, f"{color_mark} {slot_name:<16}: {item_str}")
+
+        # Close button
+        btn_frame = tk.Frame(dialog, bg="#0f0f1a")
+        btn_frame.pack(fill=tk.X, padx=10, pady=(4, 10))
+        ttk.Button(btn_frame, text="關閉", command=dialog.destroy).pack(side=tk.RIGHT)
+
 
     def _on_change_destination(self) -> None:
         """Open destination selection dialog."""
