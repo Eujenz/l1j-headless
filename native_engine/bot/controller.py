@@ -801,10 +801,27 @@ class HeadlessBot:
             self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
-        elif item_id == 110 or "Bravery" in name:
+        elif item_id in (110, 253) or "Bravery" in name or "勇敢" in name:
+            # LEGACY_ARCHAEOLOGY: PotionofBravery.java:30 - Knight only (classType == 1)
+            # Other classes receive S_ServerMessage(79) ("沒有任何事情發生")
+            if getattr(self.player, "class_type", 1) != 1:
+                self._log(f"[PLAYER] USE_ITEM_FAILED: Bravery Potion restricted to Knight (Message 79)")
+                return
             self.status_mgr.apply_brave(self.player, duration_sec=300)
             self.potions_consumed += 1
-            self._log(f"[PLAYER] USE_ITEM Bravery Potion -> Brave applied for 300s")
+            self._log(f"[PLAYER] USE_ITEM Bravery Potion -> Brave applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
+            self._player_busy_until = self.clock.now() + 600
+            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
+
+        elif item_id in (56, 112) or "Wafer" in name or "Cookie" in name or "餅乾" in name:
+            # LEGACY_ARCHAEOLOGY: ElvenWafer.java:29 - Elf only (classType == 2)
+            # Other classes receive S_ServerMessage(79) ("沒有任何事情發生")
+            if getattr(self.player, "class_type", 1) != 2:
+                self._log(f"[PLAYER] USE_ITEM_FAILED: Elven Wafer restricted to Elf (Message 79)")
+                return
+            self.status_mgr.apply_brave(self.player, duration_sec=300)
+            self.potions_consumed += 1
+            self._log(f"[PLAYER] USE_ITEM Elven Wafer -> Brave applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
             self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 

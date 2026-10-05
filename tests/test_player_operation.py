@@ -436,6 +436,49 @@ class TestArchitectureSameExecutionPath(unittest.TestCase):
         # Skeleton GFX 30 -> 640ms
         self.assertEqual(spr.get_move_speed(30), 640)
 
+    def test_brave_potion_and_elven_wafer_class_restrictions(self):
+        """
+        Legacy L1J Archaeology:
+          - PotionofBravery.java:30: Only Knight (class_type == 1) can use Bravery Potion.
+          - ElvenWafer.java:29: Only Elf (class_type == 2) can use Elven Wafer.
+          - Ineligible classes get Message 79 (no buff applied).
+        """
+        brave_item = Item(item_id=110, count=1, name="Bravery Potion")
+        wafer_item = Item(item_id=56, count=1, name="Elven Wafer")
+
+        # 1. Knight (class_type = 1) using Bravery Potion -> SUCCESS
+        self.player_manual.class_type = 1
+        self.player_manual.inventory.add(brave_item)
+        op_knight_brave = PlayerOperation(PlayerOperationType.USE_ITEM, target=brave_item)
+        self.bot_manual.execute_player_operation(op_knight_brave)
+        self.assertTrue(self.player_manual.is_brave)
+        self.assertEqual(self.player_manual.effective_move_speed_ms, int(640 * 0.75))
+
+        # Reset brave status
+        self.bot_manual.status_mgr.remove_status(self.player_manual, "BRAVE")
+        self.assertFalse(self.player_manual.is_brave)
+
+        # 2. Knight using Elven Wafer -> FAIL (Message 79)
+        self.player_manual.inventory.add(wafer_item)
+        op_knight_wafer = PlayerOperation(PlayerOperationType.USE_ITEM, target=wafer_item)
+        self.bot_manual.execute_player_operation(op_knight_wafer)
+        self.assertFalse(self.player_manual.is_brave)
+
+        # 3. Elf (class_type = 2) using Bravery Potion -> FAIL (Message 79)
+        self.player_manual.class_type = 2
+        self.player_manual.inventory.add(brave_item)
+        op_elf_brave = PlayerOperation(PlayerOperationType.USE_ITEM, target=brave_item)
+        self.bot_manual.execute_player_operation(op_elf_brave)
+        self.assertFalse(self.player_manual.is_brave)
+
+        # 4. Elf using Elven Wafer -> SUCCESS
+        wafer_elf = Item(item_id=56, count=1, name="Elven Wafer")
+        self.player_manual.inventory.add(wafer_elf)
+        op_elf_wafer = PlayerOperation(PlayerOperationType.USE_ITEM, target=wafer_elf)
+        self.bot_manual.execute_player_operation(op_elf_wafer)
+        self.assertTrue(self.player_manual.is_brave)
+        self.assertEqual(self.player_manual.effective_move_speed_ms, int(640 * 0.75))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -216,8 +216,12 @@ class TestGameplayCoverageMVP04(unittest.TestCase):
 
     def test_domain_c_brave_potion_legacy_behavior(self):
         """
-        Legacy L1J Invariant: Brave Potion (二段加速) ONLY affects physical attack speed.
-        It DOES NOT accelerate movement speed. Green potion (一段加速) stacks on top.
+        Legacy L1J Invariant (CheckSpeed.java:101-106, PotionofBravery.java, ElvenWafer.java):
+        Brave status (二段加速) accelerates BOTH movement speed and physical attack speed
+        by a factor of 0.75.
+        When stacked with Green Potion (一段加速):
+          Move: 640ms * 0.75 * 0.75 = 360ms
+          Attack: 880ms * 0.75 * 0.75 = 495ms
         """
         base_move = 640
         base_atk = 880
@@ -225,18 +229,20 @@ class TestGameplayCoverageMVP04(unittest.TestCase):
         # Apply Brave Potion only
         self.status_mgr.apply_brave(self.knight, duration_sec=300)
         self.assertTrue(self.knight.is_brave)
-        # Move speed remains unbuffed (640ms)
-        self.assertEqual(self.knight.effective_move_speed_ms, base_move)
+        # Move speed accelerated by 25% (480ms)
+        self.assertEqual(self.knight.effective_move_speed_ms, int(base_move * 0.75))
         # Attack speed accelerated by 25% (660ms)
         self.assertEqual(self.knight.effective_attack_speed_ms, int(base_atk * 0.75))
 
-        # Now add Green Potion (Haste) -> Green accelerates move + atk; Brave stacks on atk
+        # Now add Green Potion (Haste) -> Both move & atk receive two-stage acceleration
         self.status_mgr.apply_haste(self.knight, duration_sec=300)
         self.assertTrue(self.knight.is_speed)
-        # Move speed only accelerated once by green potion (480ms), NOT double-accelerated (360ms)
-        self.assertEqual(self.knight.effective_move_speed_ms, int(base_move * 0.75))  # 480ms
+        # Move speed double-accelerated: 640 * 0.75 * 0.75 = 360ms
+        self.assertEqual(self.knight.effective_move_speed_ms, int(int(base_move * 0.75) * 0.75))  # 360ms
         # Attack speed double-accelerated by both green + brave: 880 * 0.75 * 0.75 = 495ms
         self.assertEqual(self.knight.effective_attack_speed_ms, int(int(base_atk * 0.75) * 0.75)) # 495ms
+        self.status_mgr.remove_status(self.knight, StatusType.BRAVE)
+        self.status_mgr.remove_status(self.knight, StatusType.HASTE)
 
     def test_domain_c_monster_speed_modifiers(self):
         """Monster speed multipliers: Haste = int(spd - spd * 0.3), Slow = int(spd + spd * 0.3)."""
