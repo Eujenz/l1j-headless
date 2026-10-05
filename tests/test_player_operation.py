@@ -351,6 +351,91 @@ class TestArchitectureSameExecutionPath(unittest.TestCase):
         self.assertEqual(self.player_manual.y, self.player_auto.y)
         self.assertEqual(self.player_manual.current_target.id, self.player_auto.current_target.id)
 
+    def test_manual_movement_respects_action_cadence(self):
+        """
+        Verifies that manual movement respects _player_busy_until.
+        Spamming multiple manual operations within the move interval cannot bypass cooldown.
+        """
+        from native_engine.temporal import RealTimeClock
+        rt_clock = RealTimeClock(initial_time_ms=0, time_scale=1.0)
+        self.bot_manual.clock = rt_clock
+        self.bot_manual.scheduler.clock = rt_clock
+        self.bot_manual._player_busy_until = 0
+
+        self.bot_manual.pause_helper()
+        self.assertTrue(self.bot_manual.helper_paused)
+
+        init_x = self.player_manual.x
+        init_y = self.player_manual.y
+
+        # Issue 1st manual move step (Heading 0: North)
+        op1 = PlayerOperation(
+            PlayerOperationType.MOVE_STEP,
+            target=Position(init_x, init_y - 1, map_id=self.player_manual.map_id)
+        )
+        self.bot_manual.enqueue_manual_operation(op1)
+
+        # 1st move executed immediately because player was idle
+        self.assertEqual(self.player_manual.y, init_y - 1)
+        self.assertEqual(self.bot_manual._player_busy_until, self.player_manual.effective_move_speed_ms)
+
+        # Issue 2nd manual move step while player is still busy walking (at t=0, busy until 640)
+        op2 = PlayerOperation(
+            PlayerOperationType.MOVE_STEP,
+            target=Position(init_x, init_y - 2, map_id=self.player_manual.map_id)
+        )
+        self.bot_manual.enqueue_manual_operation(op2)
+
+        # 2nd move MUST NOT execute immediately (still at init_y - 1, queued in manual_queue)
+        self.assertEqual(self.player_manual.y, init_y - 1)
+        self.assertEqual(len(self.bot_manual.manual_queue), 1)
+
+        # Advance real-time clock and scheduler to completion of 1st move interval (640ms)
+        rt_clock._logical_start = self.player_manual.effective_move_speed_ms
+        self.scheduler_manual.run_until(self.player_manual.effective_move_speed_ms)
+
+        # Now 2nd move is popped and executed by scheduled gate
+        self.assertEqual(self.player_manual.y, init_y - 2)
+        self.assertEqual(len(self.bot_manual.manual_queue), 0)
+        self.assertEqual(self.bot_manual._player_busy_until, self.player_manual.effective_move_speed_ms * 2)
+
+    def test_equip_weapon_updates_attack_speed_dynamically(self):
+        """
+        Equipping and unequipping weapon dynamically recalculates player attack_speed_ms.
+        """
+        # Female Knight (GFX 48): BareHands=1000ms, Long Sword (type 1)=920ms, Bow=1840ms
+        self.player_manual.gfx = 48
+        self.player_manual.attack_speed_ms = 1000
+        sword = Weapon(item_id=1, name="Long Sword", weapon_type=1, dmg_small=8, dmg_large=12)
+
+        equip_op = PlayerOperation(PlayerOperationType.EQUIP, target=sword)
+        self.bot_manual.execute_player_operation(equip_op)
+
+        self.assertEqual(self.player_manual.equipped_weapon.item_id, 1)
+        self.assertEqual(self.player_manual.attack_speed_ms, 920)
+
+        # Unequip -> returns to bare-hands cadence (1000ms)
+        unequip_op = PlayerOperation(PlayerOperationType.UNEQUIP, target=sword)
+        self.bot_manual.execute_player_operation(unequip_op)
+
+        self.assertIsNone(self.player_manual.equipped_weapon)
+        self.assertEqual(self.player_manual.attack_speed_ms, 1000)
+
+    def test_polymorph_spr_table_speed_resolution(self):
+        """
+        Verifies SprTable resolves move speed for polymorph/monster GFX (Golem, Zombie, Werewolf).
+        """
+        from native_engine.spr_action import SprTable
+        spr = SprTable.get_instance()
+        # Stone Golem GFX 49 -> 1280ms
+        self.assertEqual(spr.get_move_speed(49), 1280)
+        # Zombie GFX 52 -> 1640ms
+        self.assertEqual(spr.get_move_speed(52), 1640)
+        # Werewolf GFX 54 -> 560ms
+        self.assertEqual(spr.get_move_speed(54), 560)
+        # Skeleton GFX 30 -> 640ms
+        self.assertEqual(spr.get_move_speed(30), 640)
+
 
 if __name__ == "__main__":
     unittest.main()

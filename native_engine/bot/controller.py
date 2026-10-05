@@ -17,7 +17,7 @@ from ..combat import CanonicalCombat
 from ..navigation import AStarPlanner
 from ..movement import MovementEngine, can_move, HEADING_DELTA
 from ..temporal import BaseClock, VirtualClock, Scheduler
-from ..spr_action import get_pc_action_interval
+from ..spr_action import get_pc_action_interval, SprTable
 from ..status import StatusManager, StatusType
 from ..skill import SkillEngine
 from .perception import PerceptionSystem, PerceptionSnapshot
@@ -93,13 +93,21 @@ class HeadlessBot:
         self.potions_consumed = 0
 
         # Action Intervals (Resolved dynamically via SprTable: GFX + Weapon)
-        self.move_interval_ms = getattr(player, "move_speed_ms", 640)
+        self.move_interval_ms = SprTable.get_instance().get_move_speed(
+            player.gfx, getattr(player, "gfx_mode", 0)
+        )
+        if getattr(player, "move_speed_ms", None) is None or player.move_speed_ms == 640:
+            player.move_speed_ms = self.move_interval_ms
+        else:
+            self.move_interval_ms = player.move_speed_ms
+
         self.attack_interval_ms = get_pc_action_interval(
             player.gfx, player.equipped_weapon, fallback=getattr(player, "attack_speed_ms", 920)
         )
         self.player.attack_speed_ms = self.attack_interval_ms
 
         # Autonomous Multi-Actor State
+        self._player_busy_until: int = 0
         self._monster_busy_until: Dict[int, int] = {}
         self.respawn_delay_override_ms = respawn_delay_override_ms
         self.respawn_count = 0
@@ -203,10 +211,19 @@ class HeadlessBot:
         """
         Enqueue a manual player operation from UI.
         Processed with highest priority on the canonical Controller pipeline.
+        Capped to prevent keyboard-repeat queue flooding while respecting action cadence.
         """
+        if len(self.manual_queue) >= 5:
+            return
         self.manual_queue.append(op)
         if self.helper_paused:
-            self.step()
+            from ..temporal import RealTimeClock
+            from ..player_operation import PlayerOperationType
+            op_type = getattr(op, "op_type", getattr(op, "action_type", None))
+            is_non_physical = (op_type == PlayerOperationType.SELECT_TARGET)
+
+            if is_non_physical or not isinstance(self.clock, RealTimeClock) or self.clock.now() >= self._player_busy_until:
+                self.step()
 
     def step(self) -> None:
         """
@@ -217,6 +234,30 @@ class HeadlessBot:
             return
 
         self._sync_map_grid()
+
+        # Check manual operation queue first (highest priority for human player)
+        if self.manual_queue:
+            from ..temporal import RealTimeClock
+            from ..player_operation import PlayerOperationType
+            first_op = self.manual_queue[0]
+            op_type = getattr(first_op, "op_type", getattr(first_op, "action_type", None))
+            is_non_physical = (op_type == PlayerOperationType.SELECT_TARGET)
+
+            # In real-time mode, physical actions must respect the player's action cadence gate
+            if not is_non_physical and isinstance(self.clock, RealTimeClock) and self.clock.now() < self._player_busy_until:
+                return
+
+            manual_op = self.manual_queue.pop(0)
+            op_name = getattr(manual_op, "op_type", getattr(manual_op, "action_type", None))
+            name_str = op_name.name if hasattr(op_name, "name") else str(op_name)
+            self._log(f"[MANUAL] Executing manual player operation: {name_str}")
+            self.execute_player_operation(manual_op)
+            return
+
+        # Action interval cooldown: player cannot initiate new autonomous actions while busy
+        from ..temporal import RealTimeClock
+        if isinstance(self.clock, RealTimeClock) and self.clock.now() < self._player_busy_until:
+            return
 
         # 1. Perception
         snapshot = self.perception_sys.perceive(
@@ -234,15 +275,6 @@ class HeadlessBot:
                     m.target = self.player
                     if self.clock.now() >= self._monster_busy_until.get(m.uid, 0):
                         self._schedule_monster_action(m, delay_ms=30)
-
-        # Check manual operation queue first (highest priority for human player)
-        if self.manual_queue:
-            manual_op = self.manual_queue.pop(0)
-            op_name = getattr(manual_op, "op_type", getattr(manual_op, "action_type", None))
-            name_str = op_name.name if hasattr(op_name, "name") else str(op_name)
-            self._log(f"[MANUAL] Executing manual player operation: {name_str}")
-            self.execute_player_operation(manual_op)
-            return
 
         # If helper is paused, do NOT generate autonomous policy actions!
         if self.helper_paused:
@@ -365,13 +397,17 @@ class HeadlessBot:
     def _execute_equip(self, item_or_weapon: Any) -> None:
         if isinstance(item_or_weapon, Weapon):
             self.player.equipped_weapon = item_or_weapon
-            self._log(f"[PLAYER] EQUIP Weapon: {item_or_weapon.name}")
+            self.player.attack_speed_ms = get_pc_action_interval(self.player.gfx, item_or_weapon)
+            self._log(f"[PLAYER] EQUIP Weapon: {item_or_weapon.name} (AtkSpeed: {self.player.attack_speed_ms}ms)")
+        self._player_busy_until = self.clock.now() + 200
         self.scheduler.schedule_after(200, self.step, name="equip_action_gate")
 
     def _execute_unequip(self, item_or_weapon: Any) -> None:
         old_w = self.player.equipped_weapon
         self.player.equipped_weapon = None
-        self._log(f"[PLAYER] UNEQUIP Weapon: {old_w.name if old_w else 'None'}")
+        self.player.attack_speed_ms = get_pc_action_interval(self.player.gfx, None)
+        self._log(f"[PLAYER] UNEQUIP Weapon: {old_w.name if old_w else 'None'} (AtkSpeed: {self.player.attack_speed_ms}ms)")
+        self._player_busy_until = self.clock.now() + 200
         self.scheduler.schedule_after(200, self.step, name="unequip_action_gate")
 
     def _execute_move_step(self, target_pos: Position) -> None:
@@ -402,7 +438,8 @@ class HeadlessBot:
             is_target_tile = (new_x == target_pos.x and new_y == target_pos.y)
             if is_target_tile and self.active_target is not None:
                 # Already in melee range
-                self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="step_tick")
+                self._player_busy_until = self.clock.now() + 50
+                self.scheduler.schedule_after(50, self.step, name="melee_ready_gate")
                 return
 
             can_step, _ = can_move(self._current_map_grid, self.player.x, self.player.y, chosen_heading)
@@ -432,6 +469,7 @@ class HeadlessBot:
                 self._log(f"MOVE: Cannot navigate to ({target_pos.x}, {target_pos.y}), retrying")
 
         # Gate action interval: player.effective_move_speed_ms PC walking
+        self._player_busy_until = self.clock.now() + self.player.effective_move_speed_ms
         self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="move_action_gate")
 
     def _execute_attack(self, monster: Monster) -> None:
@@ -505,6 +543,7 @@ class HeadlessBot:
             self.player.current_target = None
             self.active_target = None
             # Schedule next step after attack interval
+            self._player_busy_until = self.clock.now() + self.player.effective_attack_speed_ms
             self.scheduler.schedule_after(self.player.effective_attack_speed_ms, self.step, name="attack_action_gate")
             return
 
@@ -515,6 +554,7 @@ class HeadlessBot:
             self._schedule_monster_action(monster, delay_ms=30)
 
         # 5. Gate player action interval: effective_attack_speed_ms
+        self._player_busy_until = self.clock.now() + self.player.effective_attack_speed_ms
         self.scheduler.schedule_after(self.player.effective_attack_speed_ms, self.step, name="attack_action_gate")
 
     def _schedule_monster_action(self, monster: Monster, delay_ms: int) -> None:
@@ -687,6 +727,7 @@ class HeadlessBot:
             self._roam_steps_remaining = 3
 
         # Schedule next action after effective walk interval
+        self._player_busy_until = self.clock.now() + self.player.effective_move_speed_ms
         self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="roam_action_gate")
 
     def _execute_use_potion(self, potion: Any) -> None:
@@ -715,6 +756,7 @@ class HeadlessBot:
 
         if not item or item.count <= 0:
             self._log(f"[PLAYER] USE_ITEM_FAILED: Item {item_or_id} not available in inventory")
+            self._player_busy_until = self.clock.now() + 100
             self.scheduler.schedule_after(100, self.step, name="item_action_gate")
             return
 
@@ -733,6 +775,7 @@ class HeadlessBot:
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
             self.potions_consumed += 1
             self._log(f"[PLAYER] HP={hp_pct}% [PLAYER] USE_ITEM Red Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id in (103, 105) or "Orange" in name:
@@ -740,6 +783,7 @@ class HeadlessBot:
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
             self.potions_consumed += 1
             self._log(f"[PLAYER] HP={hp_pct}% [PLAYER] USE_ITEM Orange Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id == 106 or "Clear" in name:
@@ -747,18 +791,21 @@ class HeadlessBot:
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
             self.potions_consumed += 1
             self._log(f"[PLAYER] HP={hp_pct}% [PLAYER] USE_ITEM Clear Potion (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id == 108 or "Green" in name:
             self.status_mgr.apply_haste(self.player, duration_sec=300)
             self.potions_consumed += 1
             self._log(f"[PLAYER] USE_ITEM Green Potion -> Haste applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
+            self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id == 110 or "Bravery" in name:
             self.status_mgr.apply_brave(self.player, duration_sec=300)
             self.potions_consumed += 1
             self._log(f"[PLAYER] USE_ITEM Bravery Potion -> Brave applied for 300s")
+            self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id in (139, 454) or "Escape" in name or "回城" in name:
@@ -775,13 +822,15 @@ class HeadlessBot:
                 self.maps_traversed += 1
             self._sync_map_grid()
             self._log(f"[PLAYER] USE_ITEM Escape Scroll -> Teleported to Town ({self.player.x}, {self.player.y}) Map 0")
-            self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="item_action_gate")
+            self._player_busy_until = self.clock.now() + 500
+            self.scheduler.schedule_after(500, self.step, name="item_action_gate")
 
         else:
             heal = self.rng.rand(10, 30, "DefaultPotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
             self.potions_consumed += 1
             self._log(f"[PLAYER] USE_ITEM {name} (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
+            self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
     def _execute_transition_map(self, portal_pos: Position) -> None:
@@ -811,7 +860,8 @@ class HeadlessBot:
             self._sync_map_grid()
             self._log(f"PORTAL_TRANSITION: Exited to Surface at ({self.player.x}, {self.player.y}) Map 0")
 
-        self.scheduler.schedule_after(self.player.effective_move_speed_ms, self.step, name="portal_action_gate")
+        self._player_busy_until = self.clock.now() + 500
+        self.scheduler.schedule_after(500, self.step, name="portal_action_gate")
 
     def _execute_buy_supply(self, target: Any) -> None:
         """
@@ -900,12 +950,14 @@ class HeadlessBot:
                 self._log(f"SKILL CAST: Lesser Heal -> Restored {res.damage} HP | Player HP: {self.player.hp}/{self.player.max_hp} MP: {self.player.mp}/{self.player.max_mp}")
             else:
                 self._log(f"SKILL FAILED: Lesser Heal failed ({res.message})")
+            self._player_busy_until = self.clock.now() + res.cast_interval_ms
             self.scheduler.schedule_after(res.cast_interval_ms, self.step, name="skill_cast_gate")
 
         elif skill_id == 4:
             # Energy Bolt
             target = action.target or self.active_target
             if not target or target.is_dead:
+                self._player_busy_until = self.clock.now() + 200
                 self.scheduler.schedule_after(200, self.step, name="skill_cast_gate")
                 return
 
@@ -957,6 +1009,7 @@ class HeadlessBot:
             else:
                 self._log(f"SKILL FAILED: Energy Bolt failed ({res.message})")
 
+            self._player_busy_until = self.clock.now() + res.cast_interval_ms
             self.scheduler.schedule_after(res.cast_interval_ms, self.step, name="skill_cast_gate")
 
         elif skill_id == 28:
@@ -966,9 +1019,11 @@ class HeadlessBot:
                 self._log(f"SKILL CAST: Haste -> Haste applied for 1200s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms) | MP: {self.player.mp}/{self.player.max_mp}")
             else:
                 self._log(f"SKILL FAILED: Haste failed ({res.message})")
+            self._player_busy_until = self.clock.now() + res.cast_interval_ms
             self.scheduler.schedule_after(res.cast_interval_ms, self.step, name="skill_cast_gate")
 
         else:
+            self._player_busy_until = self.clock.now() + 600
             self.scheduler.schedule_after(600, self.step, name="skill_cast_gate")
 
     def run_session(

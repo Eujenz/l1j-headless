@@ -339,7 +339,7 @@ class GameSession:
                 return False, events
 
             self.tick += 10
-            self.clock.advance_by(self.player.move_speed_ms)
+            self.clock.advance_by(self.player.effective_move_speed_ms)
             step_evs = move_engine.execute_cmd_move(self.player, h, tick=self.tick)
             events.extend(step_evs)
 
@@ -392,7 +392,7 @@ class GameSession:
                 break
 
             self.tick += 10
-            self.clock.advance_by(self.player.move_speed_ms)
+            self.clock.advance_by(self.player.effective_move_speed_ms)
             step_evs = move_engine.execute_cmd_move(self.player, chosen_h, tick=self.tick)
             events.extend(step_evs)
 
@@ -504,7 +504,7 @@ class GameSession:
 
             self.tick += 30
             cur_tick = self.tick
-            self.clock.advance_by(self.player.attack_speed_ms)
+            self.clock.advance_by(self.player.effective_attack_speed_ms)
 
             # --- Player attacks Monster ---
             events.append(AttackStarted(tick=cur_tick, attacker_id=self.player.id, target_id=monster.uid))
@@ -579,7 +579,7 @@ class GameSession:
             # dmg = rand(min_dmg, max_dmg) - rand(1, total_ac); no HitFigure
             self.tick += 30
             cur_tick = self.tick
-            self.clock.advance_by(monster.attack_speed_ms)
+            self.clock.advance_by(monster.effective_attack_speed_ms)
 
             m_min = monster.min_dmg
             m_max = monster.max_dmg

@@ -83,8 +83,6 @@ class Actor:
             speed = int(speed * 0.75)
         if self.is_slow:
             speed = int(speed / 0.75)
-        if self.is_brave:
-            speed = int(speed * 0.75)
         return max(1, speed)
 
     @property
