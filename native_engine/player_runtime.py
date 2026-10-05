@@ -65,7 +65,9 @@ class PlayerRuntimeSnapshot:
     game_events: List[Any]          # PlayerGameEvent list for UI activity log
     virtual_time_ms: int
     speed: float
-
+    ground_drops: List[Dict[str, Any]] = field(default_factory=list)
+    exp_base: int = 0      # cumulative EXP at start of current level
+    exp_next: int = 0      # cumulative EXP needed for next level (0 = max)
 
 class HeadlessPlayerRuntime:
     """
@@ -115,6 +117,7 @@ class HeadlessPlayerRuntime:
         # 4. Initialize Headless Bot Controller
         self.trace_logs: List[str] = []  # Debug trace (all events)
         self._game_events: deque = deque(maxlen=500)  # Player-visible game events (bounded)
+        self._event_seq = 0
 
         def log_sink(msg: str):
             with self.lock:
@@ -128,6 +131,8 @@ class HeadlessPlayerRuntime:
                     from ui.game_events import GameEventFormatter
                     evt = GameEventFormatter.parse(msg, self.clock.now())
                     if evt is not None:
+                        self._event_seq += 1
+                        evt.seq = self._event_seq
                         self._game_events.append(evt)
                 except Exception:
                     pass  # Never crash the game loop due to event parsing
@@ -515,6 +520,13 @@ class HeadlessPlayerRuntime:
                 game_events=recent_game_events,
                 virtual_time_ms=self.clock.now(),
                 speed=self.speed,
+                ground_drops=[
+                    {"x": d.pos.x, "y": d.pos.y, "name": d.item.name}
+                    for d in self.bot.drop_system.ground_drops
+                    if d.pos.map_id == p.map_id and max(abs(d.pos.x - px), abs(d.pos.y - py)) <= 20
+                ][:40],
+                exp_base=self.session.progression.get_exp_for_level(p.level),
+                exp_next=self.session.progression.next_level_exp(p) or 0,
             )
 
     def subscribe(self, callback: Callable[[PlayerRuntimeSnapshot], None]) -> None:

@@ -138,6 +138,7 @@ class PlayerGameEvent:
     text: str          # e.g. "你對 骷髏 造成 8 點傷害" (Traditional Chinese)
     timestamp_ms: int  # virtual game time in ms
     metadata: dict = field(default_factory=dict)  # optional structured data for UI
+    seq: int = 0  # monotonic sequence assigned by runtime (incremental consumption)
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +181,15 @@ class GameEventFormatter:
         """
         line = log_line.strip()
         if not line:
+            return None
+
+        body = re.sub(r"^\[T=\d+\]\s*", "", line)
+        if body.startswith(("[POLICY]", "[PERCEPTION]", "[MANUAL]", "[HELPER]")):
+            return None
+        real = cls._parse_real(body, virtual_time_ms)
+        if real is not None:
+            return real
+        if cls._is_known_internal(body):
             return None
 
         # Combat damage
@@ -340,3 +350,101 @@ class GameEventFormatter:
         m = (total_s // 60) % 60
         s = total_s % 60
         return f"{m:02d}:{s:02d}"
+
+    # ------------------------------------------------------------------
+    # Parsers for the REAL native controller log formats
+    # ------------------------------------------------------------------
+    _R_ATTACK = re.compile(r"\[PLAYER\] ATTACK (.+?)#\d+ \| (HIT|MISS) for (\d+) dmg")
+    _R_MAGIC = re.compile(r"SKILL CAST: Energy Bolt -> Hit (.+?) for (\d+) magic dmg")
+    _R_HEAL_SKILL = re.compile(r"SKILL CAST: Lesser Heal -> Restored (\d+) HP")
+    _R_MON_ATK = re.compile(r"MONSTER ATTACK: (.+?)\u2192Player for (\d+) dmg")
+    _R_DIED = re.compile(r"MONSTER DIED: (.+?) slain.*?\+(\d+) EXP")
+    _R_LEVEL = re.compile(r"LEVEL UP: .*?Lv(\d+)\D+Lv(\d+)")
+    _R_DROP = re.compile(r"GROUND DROP: .+? dropped (.+?) x(\d+) at")
+    _R_LOOT = re.compile(r"LOOT: Picked up (.+?) x(\d+)")
+    _R_PDIED = re.compile(r"PLAYER DIED: Slain by (.+?)\.")
+    _R_ITEM = re.compile(r"\[PLAYER\] USE_ITEM (.+?) (?:\(\+(\d+) HP\)|->)")
+    _R_SELECT = re.compile(r"\[PLAYER\] SELECT_TARGET -> (.+?)#\d+")
+    _R_SHOP = re.compile(r"\[SHOP\] (?:PARTIAL_RESUPPLY: )?(.+?) current=\d+ target=\d+ price=\d+ buy=(\d+) cost=(\d+)")
+    _R_PORTAL = re.compile(r"PORTAL_TRANSITION: .*Map (\d+)\s*$")
+    _SKILL_ZH = {"Energy Bolt": "能量箭", "Lesser Heal": "初級治癒術", "Haste": "加速術"}
+
+    _INTERNAL_PREFIXES = (
+        "[PLAYER]", "[SHOP]", "MOVE", "PATROL", "HP_REGEN", "MP_REGEN", "ATTACK TRIGGERED",
+        "DAMAGE RESOLVED", "RESPAWN:", "PLAYER SPAWN", "SESSION END", "MONSTER MOVE",
+        "SKILL FAILED", "SKILL CAST", "GROUND DROP", "MONSTER DIED", "LEVEL UP",
+    )
+
+    @classmethod
+    def _is_known_internal(cls, body: str) -> bool:
+        return body.startswith(cls._INTERNAL_PREFIXES)
+
+    @classmethod
+    def _parse_real(cls, body: str, t: int) -> Optional["PlayerGameEvent"]:
+        m = cls._R_ATTACK.search(body)
+        if m:
+            name, res, dmg = m.group(1), m.group(2), int(m.group(3))
+            if res == "MISS":
+                return PlayerGameEvent("COMBAT_MISS", f"你的攻擊沒有命中 {name}", t, {"monster": name})
+            return PlayerGameEvent("COMBAT_DAMAGE", f"你對 {name} 造成 {dmg} 點傷害", t,
+                                   {"damage": dmg, "monster": name})
+        m = cls._R_MAGIC.search(body)
+        if m:
+            name, dmg = m.group(1), int(m.group(2))
+            return PlayerGameEvent("COMBAT_DAMAGE", f"你的魔法「能量箭」對 {name} 造成 {dmg} 點傷害", t,
+                                   {"damage": dmg, "monster": name})
+        m = cls._R_HEAL_SKILL.search(body)
+        if m:
+            amt = int(m.group(1))
+            return PlayerGameEvent("COMBAT_HEAL", f"你的魔法「初級治癒術」恢復了 {amt} HP", t, {"amount": amt})
+        m = cls._R_MON_ATK.search(body)
+        if m:
+            name, dmg = m.group(1), int(m.group(2))
+            text = f"{name} 對你造成 {dmg} 點傷害" if dmg > 0 else f"{name} 的攻擊沒有傷到你"
+            return PlayerGameEvent("MONSTER_HIT", text, t, {"damage": dmg, "monster": name})
+        m = cls._R_DIED.search(body)
+        if m:
+            name, exp = m.group(1), int(m.group(2))
+            return PlayerGameEvent("MONSTER_DEATH", f"{name} 被擊敗，獲得 {exp} EXP", t,
+                                   {"monster": name, "exp": exp})
+        m = cls._R_LEVEL.search(body)
+        if m:
+            lv = int(m.group(2))
+            return PlayerGameEvent("LEVEL_UP", f"✦ 等級提升！達到 Lv {lv}", t, {"level": lv})
+        m = cls._R_DROP.search(body)
+        if m:
+            return PlayerGameEvent("LOOT_DROP", f"掉落了 {zh_item(m.group(1))} x{m.group(2)}", t)
+        m = cls._R_LOOT.search(body)
+        if m:
+            item, cnt = m.group(1), int(m.group(2))
+            return PlayerGameEvent("LOOT_PICKED", f"拾取 {zh_item(item)} x{cnt}", t,
+                                   {"item": item, "count": cnt})
+        m = cls._R_PDIED.search(body)
+        if m:
+            return PlayerGameEvent("PLAYER_DEATH", f"你被 {m.group(1)} 殺死了", t)
+        if body.startswith("PLAYER RESPAWN"):
+            return PlayerGameEvent("RESPAWN", "你在村莊復活了", t)
+        m = cls._R_ITEM.search(body)
+        if m:
+            item, heal = m.group(1), m.group(2)
+            if heal:
+                return PlayerGameEvent("COMBAT_HEAL", f"使用 {zh_item(item)}，恢復 {heal} HP", t,
+                                       {"amount": int(heal), "item": item})
+            if item == "Escape Scroll":
+                return PlayerGameEvent("RETURN_STARTED", "使用回城卷軸，傳送回村莊", t)
+            return PlayerGameEvent("ITEM_USED", f"你使用了 {zh_item(item)}", t, {"item": item})
+        m = cls._R_SELECT.search(body)
+        if m:
+            return PlayerGameEvent("TARGET_SELECTED", f"鎖定目標：{m.group(1)}", t)
+        m = cls._R_SHOP.search(body)
+        if m and int(m.group(2)) > 0:
+            return PlayerGameEvent("SHOP_PURCHASE",
+                                   f"向潘朵拉購買 {zh_item(m.group(1))} x{m.group(2)}（花費 {m.group(3)} 金幣）", t,
+                                   {"item": m.group(1), "count": int(m.group(2))})
+        m = cls._R_PORTAL.search(body)
+        if m:
+            return PlayerGameEvent("MAP_TRANSITION", f"進入 {zh_map(int(m.group(1)))}", t,
+                                   {"map_id": int(m.group(1))})
+        if body.startswith("[PLAYER] RETURN_TOWN"):
+            return PlayerGameEvent("RETURN_STARTED", "準備返回村莊", t)
+        return None

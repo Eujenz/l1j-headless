@@ -182,7 +182,7 @@ class PlayerWindow:
         left = ttk.Frame(mid, style="Panel.TFrame", padding=2)
         left.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.world_canvas = WorldCanvas(left)
+        self.world_canvas = WorldCanvas(left, on_monster_click=self.vm.manual_select_target)
         self.world_canvas.pack(fill=tk.BOTH, expand=True)
 
         # Right panel
@@ -407,6 +407,9 @@ class PlayerWindow:
 
         # Tag colors for different event types
         self.log_text.tag_configure("damage", foreground="#ff8888")
+        self.log_text.tag_configure("monster_hit", foreground="#ff7777")
+        self.log_text.tag_configure("miss", foreground="#888888")
+        self.log_text.tag_configure("target", foreground="#ffbb66")
         self.log_text.tag_configure("death", foreground="#ff4444")
         self.log_text.tag_configure("heal", foreground="#44ff88")
         self.log_text.tag_configure("loot", foreground="#ffd700")
@@ -424,7 +427,8 @@ class PlayerWindow:
             return
         try:
             snap = self.vm.get_cached_snapshot()
-            if snap is not None and snap is not getattr(self, "_last_drawn_snap", None):
+            if snap is not None and (snap is not getattr(self, "_last_drawn_snap", None)
+                                     or self.world_canvas.has_active_effects()):
                 self._last_drawn_snap = snap
                 grid = self._get_map_grid(snap.map_id)
                 self.world_canvas.update_view(snap, grid)
@@ -450,7 +454,7 @@ class PlayerWindow:
         try:
             snap = self.vm.get_cached_snapshot()
             if snap is not None and hasattr(snap, "game_events"):
-                self._append_new_events(snap.game_events)
+                self._append_new_events(snap.game_events, snap)
         except Exception as e:
             pass
         self.root.after(self._POLL_LOG_MS, self._poll_log)
@@ -484,7 +488,11 @@ class PlayerWindow:
         self.mp_text_lbl.config(text=f"{snap.mp}/{snap.max_mp}")
 
         # EXP / Adena
-        self.exp_lbl.config(text=f"EXP: {snap.exp:,}")
+        if snap.exp_next > snap.exp_base:
+            pct = max(0, min(100, (snap.exp - snap.exp_base) * 100 // (snap.exp_next - snap.exp_base)))
+            self.exp_lbl.config(text=f"EXP {snap.exp:,} ({pct}%)")
+        else:
+            self.exp_lbl.config(text=f"EXP {snap.exp:,}")
         self.adena_lbl.config(text=f"金幣: {snap.adena:,}")
 
         # Location
@@ -585,13 +593,41 @@ class PlayerWindow:
             line = f"{marker}{m['name']:<10} HP:{hp_pct:>3}% (d={m['dist']})"
             self.monster_listbox.insert(tk.END, line)
 
-    def _append_new_events(self, game_events: list) -> None:
-        """Append-only log update. Only adds events we haven't shown yet."""
-        total = len(game_events)
-        if total <= self._last_log_event_count:
+    def _spawn_float(self, evt, snap) -> None:
+        """Visual feedback near the relevant actor (UI only)."""
+        if snap is None:
             return
-        new_events = game_events[self._last_log_event_count:]
-        self._last_log_event_count = total
+        md = evt.metadata or {}
+        px, py = snap.x, snap.y
+        if evt.type == "COMBAT_DAMAGE":
+            tx, ty = px, py
+            if snap.active_target:
+                tx, ty = snap.active_target["x"], snap.active_target["y"]
+            self.world_canvas.add_float_text(f"-{md.get('damage', 0)}", "#ff6666", tx, ty)
+        elif evt.type == "MONSTER_HIT" and md.get("damage"):
+            self.world_canvas.add_float_text(f"-{md['damage']}", "#ff4444", px, py)
+        elif evt.type == "COMBAT_MISS":
+            tx, ty = px, py
+            if snap.active_target:
+                tx, ty = snap.active_target["x"], snap.active_target["y"]
+            self.world_canvas.add_float_text("MISS", "#aaaaaa", tx, ty)
+        elif evt.type == "COMBAT_HEAL":
+            self.world_canvas.add_float_text(f"+{md.get('amount', 0)}", "#44ff88", px, py)
+        elif evt.type == "MONSTER_DEATH" and md.get("exp"):
+            self.world_canvas.add_float_text(f"+{md['exp']} EXP", "#66ccff", px, py)
+        elif evt.type == "LOOT_PICKED":
+            self.world_canvas.add_float_text(evt.text.replace("拾取 ", "+"), "#ffd700", px, py)
+        elif evt.type == "LEVEL_UP":
+            self.world_canvas.add_float_text("LEVEL UP!", "#ffff00", px, py)
+
+    def _append_new_events(self, game_events: list, snap=None) -> None:
+        """Append-only log update keyed by event.seq (robust to the bounded window)."""
+        new_events = [e for e in game_events if e.seq > self._last_log_event_count]
+        if not new_events:
+            return
+        self._last_log_event_count = new_events[-1].seq
+        for evt in new_events[-8:]:
+            self._spawn_float(evt, snap)
 
         self.log_text.config(state=tk.NORMAL)
         for evt in new_events:
@@ -613,9 +649,13 @@ class PlayerWindow:
     def _event_tag(self, event_type: str) -> str:
         return {
             "COMBAT_DAMAGE": "damage",
+            "MONSTER_HIT": "monster_hit",
+            "COMBAT_MISS": "miss",
+            "TARGET_SELECTED": "target",
             "MONSTER_DEATH": "death",
             "COMBAT_HEAL": "heal",
             "ITEM_USED": "heal",
+            "LOOT_DROP": "loot",
             "LOOT_PICKED": "loot",
             "LEVEL_UP": "levelup",
             "MAP_TRANSITION": "map",

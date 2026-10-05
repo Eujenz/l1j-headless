@@ -174,5 +174,111 @@ class TestChineseHelpers(unittest.TestCase):
         self.assertEqual(zh_item("Mystery Herb"), "Mystery Herb")
 
 
+class TestRealControllerEvents(unittest.TestCase):
+    """Verifies that the actual log strings emitted by controller.py parse correctly."""
+
+    def test_real_controller_attack_hit_and_miss(self):
+        hit_line = "[T=1000] [PLAYER] ATTACK Skeleton#101 | HIT for 12 dmg (IMMEDIATE) | Target HP: 23/35"
+        evt = GameEventFormatter.parse(hit_line, 1000)
+        self.assertIsNotNone(evt)
+        self.assertEqual(evt.type, "COMBAT_DAMAGE")
+        self.assertIn("12", evt.text)
+        self.assertIn("Skeleton", evt.text)
+        self.assertEqual(evt.metadata.get("damage"), 12)
+
+        miss_line = "[T=1200] [PLAYER] ATTACK Orc#102 | MISS for 0 dmg (IMMEDIATE) | Target HP: 40/40"
+        evt_miss = GameEventFormatter.parse(miss_line, 1200)
+        self.assertIsNotNone(evt_miss)
+        self.assertEqual(evt_miss.type, "COMBAT_MISS")
+        self.assertIn("沒有命中", evt_miss.text)
+
+    def test_real_controller_monster_attack(self):
+        line = "[T=1400] MONSTER ATTACK: Stone Golem→Player for 18 dmg | Player HP: 82/100"
+        evt = GameEventFormatter.parse(line, 1400)
+        self.assertIsNotNone(evt)
+        self.assertEqual(evt.type, "MONSTER_HIT")
+        self.assertIn("Stone Golem", evt.text)
+        self.assertIn("18", evt.text)
+        self.assertEqual(evt.metadata.get("damage"), 18)
+
+    def test_real_controller_skill_cast(self):
+        magic_line = "SKILL CAST: Energy Bolt -> Hit Werewolf for 15 magic dmg (IMMEDIATE) | Target HP: 10/25 MP: 5/10"
+        evt = GameEventFormatter.parse(magic_line, 1600)
+        self.assertIsNotNone(evt)
+        self.assertEqual(evt.type, "COMBAT_DAMAGE")
+        self.assertIn("能量箭", evt.text)
+        self.assertIn("15", evt.text)
+
+        heal_line = "SKILL CAST: Lesser Heal -> Restored 20 HP | Player HP: 95/100 MP: 2/10"
+        evt_h = GameEventFormatter.parse(heal_line, 1800)
+        self.assertIsNotNone(evt_h)
+        self.assertEqual(evt_h.type, "COMBAT_HEAL")
+        self.assertIn("初級治癒術", evt_h.text)
+        self.assertEqual(evt_h.metadata.get("amount"), 20)
+
+    def test_real_controller_ground_drop_and_loot(self):
+        drop_line = "[PLAYER] GROUND DROP: Skeleton dropped Adena x30 at (32671, 32804)"
+        evt_d = GameEventFormatter.parse(drop_line, 2000)
+        self.assertIsNotNone(evt_d)
+        self.assertEqual(evt_d.type, "LOOT_DROP")
+        self.assertIn("金幣", evt_d.text)
+
+        loot_line = "LOOT: Picked up Adena x30 -> Added to Inventory"
+        evt_l = GameEventFormatter.parse(loot_line, 2200)
+        self.assertIsNotNone(evt_l)
+        self.assertEqual(evt_l.type, "LOOT_PICKED")
+        self.assertIn("金幣", evt_l.text)
+        self.assertEqual(evt_l.metadata.get("count"), 30)
+
+    def test_real_controller_player_died_and_respawn(self):
+        died_line = "PLAYER DIED: Slain by Lycanthrope. Novice protection active (Lv1 <= 9), 0 EXP lost."
+        evt_d = GameEventFormatter.parse(died_line, 2400)
+        self.assertIsNotNone(evt_d)
+        self.assertEqual(evt_d.type, "PLAYER_DEATH")
+        self.assertIn("Lycanthrope", evt_d.text)
+
+        respawn_line = "PLAYER RESPAWN: Revived at Town (32477, 32875) with HP: 100/100"
+        evt_r = GameEventFormatter.parse(respawn_line, 2600)
+        self.assertIsNotNone(evt_r)
+        self.assertEqual(evt_r.type, "RESPAWN")
+        self.assertIn("復活", evt_r.text)
+
+    def test_real_controller_portal_transition(self):
+        portal_line = "PORTAL_TRANSITION: Entered TI Dungeon 1F at (32671, 32804) Map 1"
+        evt_p = GameEventFormatter.parse(portal_line, 2800)
+        self.assertIsNotNone(evt_p)
+        self.assertEqual(evt_p.type, "MAP_TRANSITION")
+        self.assertIn("話島地監 1F", evt_p.text)
+
+
+class TestWorldCanvasTerrain(unittest.TestCase):
+    """Tests the real map terrain row builder and boundary recognition."""
+
+    def test_terrain_rows_structure_and_boundaries(self):
+        from native_engine.map import WorldMapGrid
+        from ui.world_canvas import build_terrain_rows, COLOR_FLOOR, COLOR_WALL, COLOR_WALL_EDGE, COLOR_VOID
+
+        # Create a tiny 5x5 grid with bounds (10, 10) to (14, 14)
+        # Center (12, 12) is walkable floor (east edge open = 0x01)
+        grid = WorldMapGrid(map_id=99, loc_x1=10, loc_y1=10, width=5, height=5)
+        grid.set_tile(12, 12, 0x01)
+
+        # Build 5x5 viewport centered at (12, 12), so origin is (10, 10)
+        rows = build_terrain_rows(grid, origin_x=10, origin_y=10, w=5, h=5)
+        self.assertEqual(len(rows), 5)
+        self.assertEqual(len(rows[0]), 5)
+
+        # Center tile (relative 2, 2) must be COLOR_FLOOR
+        self.assertEqual(rows[2][2], COLOR_FLOOR)
+
+        # Tile directly north (relative 2, 1) touches floor -> must be COLOR_WALL_EDGE
+        self.assertEqual(rows[1][2], COLOR_WALL_EDGE)
+
+        # Outside bounds (origin_x - 1, origin_y - 1) -> must be COLOR_VOID
+        rows_with_void = build_terrain_rows(grid, origin_x=8, origin_y=8, w=3, h=3)
+        self.assertEqual(rows_with_void[0][0], COLOR_VOID)
+
+
 if __name__ == "__main__":
     unittest.main()
+
