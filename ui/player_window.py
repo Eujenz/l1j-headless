@@ -424,7 +424,8 @@ class PlayerWindow:
             return
         try:
             snap = self.vm.get_cached_snapshot()
-            if snap is not None:
+            if snap is not None and snap is not getattr(self, "_last_drawn_snap", None):
+                self._last_drawn_snap = snap
                 grid = self._get_map_grid(snap.map_id)
                 self.world_canvas.update_view(snap, grid)
         except Exception as e:
@@ -541,11 +542,14 @@ class PlayerWindow:
 
     def _draw_bar(self, canvas: tk.Canvas, ratio: float, color: str) -> None:
         """Draw a simple progress bar on a Canvas widget."""
-        canvas.update_idletasks()
         w = canvas.winfo_width()
         h = canvas.winfo_height()
         if w <= 1:
             return
+        key = (w, h, int(w * ratio), color)
+        if getattr(canvas, "_last_bar_key", None) == key:
+            return
+        canvas._last_bar_key = key
         canvas.delete("all")
         fill_w = int(w * ratio)
         if fill_w > 0:

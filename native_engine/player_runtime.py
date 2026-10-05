@@ -195,11 +195,32 @@ class HeadlessPlayerRuntime:
                 else:
                     target_time = next_event.timestamp
 
+            # Wait for wall-clock pacing OUTSIDE the lock so the UI thread's
+            # get_snapshot()/manual ops are never blocked by simulation sleeps.
+            if isinstance(self.clock, RealTimeClock):
+                self._pace_outside_lock(target_time)
+                if self._stop_event.is_set():
+                    break
+
+            with self.lock:
+                # Re-validate: schedule may have changed while waiting
+                if target_time < self.clock.now():
+                    continue
                 self.scheduler.run_until(target_time)
 
             # Cooperative yield for Tkinter / UI thread
             if isinstance(self.clock, VirtualClock):
                 time.sleep(0.005)
+
+    def _pace_outside_lock(self, target_time_ms: int) -> None:
+        """Sleep (in short slices, lock-free) until wall time reaches target_time_ms."""
+        clk = self.clock
+        while not self._stop_event.is_set():
+            expected = ((target_time_ms - clk._logical_start) / 1000.0) / clk.time_scale
+            wait_s = expected - (time.perf_counter() - clk._wall_start)
+            if wait_s <= 0.001:
+                return
+            time.sleep(min(wait_s, 0.02))
 
     def step(self) -> None:
         """Executes a single step synchronously (used in tests or batch mode)."""
