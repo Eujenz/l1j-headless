@@ -777,14 +777,15 @@ class HeadlessBot:
         item_id = item.item_id
         name = item.name
 
-        # Deduct item count from inventory
-        item.count -= 1
-        if item.count <= 0 and item in self.player.inventory.items:
-            self.player.inventory.items.remove(item)
-
         hp_pct = int((self.player.hp / self.player.max_hp) * 100) if self.player.max_hp > 0 else 0
 
+        def _consume_item(target_item: Item) -> None:
+            target_item.count -= 1
+            if target_item.count <= 0 and target_item in self.player.inventory.items:
+                self.player.inventory.items.remove(target_item)
+
         if item_id == 104 or "Red" in name:
+            _consume_item(item)
             heal = self.rng.rand(10, 30, "RedPotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
             self.potions_consumed += 1
@@ -793,6 +794,7 @@ class HeadlessBot:
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id in (103, 105) or "Orange" in name:
+            _consume_item(item)
             heal = self.rng.rand(30, 70, "OrangePotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
             self.potions_consumed += 1
@@ -801,6 +803,7 @@ class HeadlessBot:
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id == 106 or "Clear" in name:
+            _consume_item(item)
             heal = self.rng.rand(70, 150, "ClearPotionHeal")
             self.player.hp = min(self.player.max_hp, self.player.hp + heal)
             self.potions_consumed += 1
@@ -809,6 +812,7 @@ class HeadlessBot:
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id == 108 or "Green" in name:
+            _consume_item(item)
             self.status_mgr.apply_haste(self.player, duration_sec=300)
             self.potions_consumed += 1
             self._log(f"[PLAYER] USE_ITEM Green Potion -> Haste applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
@@ -821,6 +825,7 @@ class HeadlessBot:
             if getattr(self.player, "class_type", 1) != 1:
                 self._log(f"[PLAYER] USE_ITEM_FAILED: Bravery Potion restricted to Knight (Message 79)")
                 return
+            _consume_item(item)
             self.status_mgr.apply_brave(self.player, duration_sec=300)
             self.potions_consumed += 1
             self._log(f"[PLAYER] USE_ITEM Bravery Potion -> Brave applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
@@ -833,6 +838,7 @@ class HeadlessBot:
             if getattr(self.player, "class_type", 1) != 2:
                 self._log(f"[PLAYER] USE_ITEM_FAILED: Elven Wafer restricted to Elf (Message 79)")
                 return
+            _consume_item(item)
             self.status_mgr.apply_brave(self.player, duration_sec=300)
             self.potions_consumed += 1
             self._log(f"[PLAYER] USE_ITEM Elven Wafer -> Brave applied for 300s (Move: {self.player.effective_move_speed_ms}ms, Atk: {self.player.effective_attack_speed_ms}ms)")
@@ -840,6 +846,7 @@ class HeadlessBot:
             self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
 
         elif item_id in (139, 454) or "Escape" in name or "回城" in name:
+            _consume_item(item)
             self.emergency_escapes += 1
             self.town_visits += 1
             old_map = self.player.map_id
@@ -857,12 +864,11 @@ class HeadlessBot:
             self.scheduler.schedule_after(500, self.step, name="item_action_gate")
 
         else:
-            heal = self.rng.rand(10, 30, "DefaultPotionHeal")
-            self.player.hp = min(self.player.max_hp, self.player.hp + heal)
-            self.potions_consumed += 1
-            self._log(f"[PLAYER] USE_ITEM {name} (+{heal} HP) -> HP: {self.player.hp}/{self.player.max_hp}")
-            self._player_busy_until = self.clock.now() + 600
-            self.scheduler.schedule_after(600, self.step, name="potion_action_gate")
+            # LEGACY_ARCHAEOLOGY: ItemInstance.java:182-184 - Unregistered / unusable items emit S_ServerMessage(74) ("沒有任何事情發生")
+            # Must NOT deduct item count and must NOT mutate HP!
+            self._log(f"[PLAYER] USE_ITEM_FAILED: {name} has no active function (Message 74: 沒有任何事情發生)")
+            self._player_busy_until = self.clock.now() + 100
+            self.scheduler.schedule_after(100, self.step, name="item_action_gate")
 
     def _execute_transition_map(self, portal_pos: Position) -> None:
         """

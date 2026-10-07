@@ -145,6 +145,26 @@ class TestPlayerOperations(unittest.TestCase):
         self.assertEqual(scroll.count, 1)
         self.assertEqual(self.bot.town_visits, 1)
 
+    def test_op_use_item_unusable_item_preserves_count_and_hp(self):
+        """
+        Legacy L1J Invariant: ItemInstance.java:182-184
+        Clicking an unhandled item (e.g. Adena 40308, materials) emits S_ServerMessage(74)
+        ('沒有任何事情發生'). It MUST NOT deduct item count and MUST NOT mutate player HP.
+        """
+        adena = Item(item_id=40308, name="Adena", count=1000)
+        self.player.inventory.add(adena)
+        self.player.hp = 50
+        initial_potions_consumed = self.bot.potions_consumed
+
+        op = PlayerOperation(PlayerOperationType.USE_ITEM, item_id=40308)
+        self.bot.execute_player_operation(op)
+
+        self.assertEqual(self.player.hp, 50, "Unusable item must not heal HP")
+        self.assertEqual(adena.count, 1000, "Unusable item count must remain unchanged")
+        self.assertEqual(self.bot.potions_consumed, initial_potions_consumed)
+        self.assertTrue(any("Message 74" in log or "no active function" in log for log in self.bot.trace_log))
+
+
     def test_op_loot_ground_drop(self):
         drop_pos = Position(self.player.x, self.player.y, self.player.map_id)
         adena = Item(item_id=40308, name="Adena", count=500)
