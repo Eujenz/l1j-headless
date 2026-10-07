@@ -29,3 +29,22 @@
 - Git Commit Author 一律嚴格保持：`Eujenz <p2030m@gmail.com>`。
 - 遵循四大分層架構：`Layer 1 Evidence -> Layer 2 Native World -> Layer 3 Player Operation -> Layer 4 Configurable Automation`。
 - 手動與自動化走完全相同執行路徑（Manual / Helper -> PlayerOperation -> Controller -> Native World）。
+
+---
+
+## 3. 對抗性審查協議 (Adversarial Audit Protocol)
+
+為防範開發 Agent 陷入自證偏誤與假綠燈欺騙，專案實施「雙軌驗證」與「分級對抗審查」（詳參 `docs/verification_matrix.md`）：
+
+### 3.1 審查分級標準
+1. **Level 1（免審查）**：純 UI 排版、文案中文化、Log 調整、效能快取。
+   - 驗收：自動化測試（`python -m unittest discover tests`）100% 通過即可 Commit。
+2. **Level 2（強制對抗審查）**：涉及核心規則、時序、公式、道具效果、職業限制、分層路徑、或修改標註 `LEGACY_OBSERVED` 的測試。
+   - 驗收：測試 100% 通過 **+** 必須啟動專用 `archaeology_auditor` Subagent 進行對抗核查並取得 `APPROVED`。
+
+### 3.2 Auditor Subagent 核心職責與一票否決權
+- **極度挑剔 (Hyper-critical)**：Auditor 不負責寫業務代碼，專注於找出漏洞與反證。
+- **證據鏈核查**：逐項檢查變更中宣稱的規則是否確實存在於本地 `Gemini/Lineage182c` 源碼中（檢查檔名、行號與邏輯一致性）。
+- **防偽造測試審查**：核對單元測試是否有「為求通過而放寬斷言」或「將錯誤假定寫成測試」的情況。
+- **一票否決權**：只要 Auditor 提出具體矛盾或發現無實證推論，該變更即刻駁回（`REJECTED`），禁止 Commit。
+
