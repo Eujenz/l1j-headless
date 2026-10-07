@@ -168,6 +168,10 @@ class PlayerWindow:
         speed_cb.pack(side=tk.RIGHT, padx=4)
         speed_cb.bind("<<ComboboxSelected>>", self._on_speed_changed)
 
+        # Inventory button (top bar)
+        ttk.Button(title_bar, text="🎒 背包 (I)", command=self._toggle_inventory_dialog,
+                   style="Action.TButton").pack(side=tk.RIGHT, padx=6)
+
         # Char info (top right)
         self.title_char_lbl = ttk.Label(title_bar, text="Lv 1 騎士",
                                         font=("Helvetica", 10, "bold"),
@@ -200,10 +204,19 @@ class PlayerWindow:
         self._build_activity_log(bottom)
 
     def _build_right_panel(self, parent) -> None:
-        """Build the right status panel: HP/MP, target, state, helper, inventory."""
+        """Build the right status panel with Tabs: Status and Inventory."""
+        notebook = ttk.Notebook(parent)
+        notebook.pack(fill=tk.BOTH, expand=True)
 
+        tab_status = ttk.Frame(notebook, style="Panel.TFrame", padding=4)
+        tab_inv = ttk.Frame(notebook, style="Panel.TFrame", padding=4)
+        notebook.add(tab_status, text=" 📊 狀態監控 ")
+        notebook.add(tab_inv, text=" 🎒 道具背包 ")
+        self.right_notebook = notebook
+
+        # ── Tab 1: 狀態監控 ──────────────────────────────────────────────────
         # ─ Character HUD ─────────────────────────────────────────────────────
-        hud = ttk.LabelFrame(parent, text="玩家", style="Panel.TLabelframe", padding=6)
+        hud = ttk.LabelFrame(tab_status, text="玩家", style="Panel.TLabelframe", padding=6)
         hud.pack(fill=tk.X, pady=(0, 6))
 
         # HP
@@ -264,7 +277,7 @@ class PlayerWindow:
                    style="Action.TButton").pack(anchor=tk.W, pady=(4, 0))
 
         # ─ Current Target ────────────────────────────────────────────────────
-        tgt = ttk.LabelFrame(parent, text="目前目標", style="Panel.TLabelframe", padding=6)
+        tgt = ttk.LabelFrame(tab_status, text="目前目標", style="Panel.TLabelframe", padding=6)
         tgt.pack(fill=tk.X, pady=(0, 6))
         self.target_name_lbl = ttk.Label(tgt, text="無", style="Value.TLabel")
         self.target_name_lbl.pack(anchor=tk.W)
@@ -274,7 +287,7 @@ class PlayerWindow:
         self.target_hp_text.pack(anchor=tk.W)
 
         # ─ Bot State ─────────────────────────────────────────────────────────
-        state_frame = ttk.LabelFrame(parent, text="狀態", style="Panel.TLabelframe", padding=6)
+        state_frame = ttk.LabelFrame(tab_status, text="狀態", style="Panel.TLabelframe", padding=6)
         state_frame.pack(fill=tk.X, pady=(0, 6))
         self.state_lbl = ttk.Label(state_frame, text="搜尋目標中", style="StatusActive.TLabel")
         self.state_lbl.pack(anchor=tk.W)
@@ -287,7 +300,7 @@ class PlayerWindow:
                    style="Action.TButton").pack(anchor=tk.W, pady=(4, 0))
 
         # ─ Helper Modules ────────────────────────────────────────────────────
-        helper_frame = ttk.LabelFrame(parent, text="輔助", style="Panel.TLabelframe", padding=6)
+        helper_frame = ttk.LabelFrame(tab_status, text="輔助", style="Panel.TLabelframe", padding=6)
         helper_frame.pack(fill=tk.X, pady=(0, 6))
 
         self.helper_status_lbl = ttk.Label(helper_frame, text="● 輔助運行中",
@@ -314,15 +327,22 @@ class PlayerWindow:
                       font=("Helvetica", 9)).pack(side=tk.LEFT)
             self._module_labels[key] = dot
 
-        # ─ Inventory ─────────────────────────────────────────────────────────
-        inv_frame = ttk.LabelFrame(parent, text="背包 (雙擊使用/穿脫)", style="Panel.TLabelframe", padding=4)
-        inv_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
+        # ── Tab 2: 道具背包 ──────────────────────────────────────────────────
+        inv_frame = ttk.LabelFrame(tab_inv, text="道具背包 (雙擊使用/穿脫)", style="Panel.TLabelframe", padding=4)
+        inv_frame.pack(fill=tk.BOTH, expand=True)
+
+        inv_top_info = ttk.Frame(inv_frame, style="Panel.TFrame")
+        inv_top_info.pack(fill=tk.X, pady=(2, 4))
+        self.tab_adena_lbl = ttk.Label(inv_top_info, text="金幣: 0", style="Value.TLabel", foreground="#ffd700")
+        self.tab_adena_lbl.pack(side=tk.LEFT)
+        self.tab_weight_lbl = ttk.Label(inv_top_info, text="負重: 0%", style="Value.TLabel")
+        self.tab_weight_lbl.pack(side=tk.RIGHT)
 
         list_container = ttk.Frame(inv_frame, style="Panel.TFrame")
         list_container.pack(fill=tk.BOTH, expand=True)
 
         self.inv_listbox = tk.Listbox(
-            list_container, height=6,
+            list_container, height=12,
             font=("Consolas", 9),
             bg="#0d0d1e", fg="#ccccee",
             selectbackground="#334466",
@@ -341,7 +361,7 @@ class PlayerWindow:
         inv_btn_row.pack(fill=tk.X, pady=(4, 0))
         ttk.Button(inv_btn_row, text="使用 / 穿脫", command=self._on_inv_double_click,
                    style="Action.TButton").pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2))
-        ttk.Button(inv_btn_row, text="裝備總覽", command=self._show_character_status_dialog,
+        ttk.Button(inv_btn_row, text="獨立視窗 (I)", command=self._toggle_inventory_dialog,
                    style="Action.TButton").pack(side=tk.RIGHT, padx=(2, 0))
 
     def _build_action_bar(self, parent) -> None:
@@ -367,6 +387,7 @@ class PlayerWindow:
             ("⚔ 攻擊", self._on_manual_attack),
             ("🧪 喝藥水", self._on_drink_potion),
             ("🏠 回城", self._on_return_town),
+            ("🎒 背包 (I)", self._toggle_inventory_dialog),
         ]
         for text, cmd in btn_cfg:
             ttk.Button(bar, text=text, command=cmd, style="Action.TButton",
@@ -546,6 +567,19 @@ class PlayerWindow:
         self._draw_bar(self.weight_canvas, w_ratio, w_color)
         self.weight_text_lbl.config(text=f"{snap.weight_pct}% ({snap.weight_30_bar}/29)")
 
+        # Tab 2 info & floating dialog sync
+        if hasattr(self, "tab_adena_lbl"):
+            self.tab_adena_lbl.config(text=f"金幣: {snap.adena:,}")
+        if hasattr(self, "tab_weight_lbl"):
+            self.tab_weight_lbl.config(text=f"負重: {snap.weight_pct}% ({snap.weight_30_bar}/29)")
+        if hasattr(self, "_dlg_w_lbl") and hasattr(self, "_dlg_w_canvas"):
+            try:
+                if self._dlg_w_lbl.winfo_exists():
+                    self._dlg_w_lbl.config(text=f"{snap.weight_pct}% ({snap.weight_30_bar}/29)")
+                    self._draw_bar(self._dlg_w_canvas, w_ratio, w_color)
+            except Exception:
+                pass
+
         # Target
         if snap.active_target:
             t = snap.active_target
@@ -623,6 +657,20 @@ class PlayerWindow:
             en = item.get("enchant", 0)
             en_str = f"+{en} " if en > 0 else ""
             self.inv_listbox.insert(tk.END, f"{eq_str}{en_str}{name_zh:<12} x{item['count']}")
+
+        # Synchronize dialog listbox if open
+        if hasattr(self, "_dlg_inv_listbox") and self._dlg_inv_listbox is not None:
+            try:
+                if self._dlg_inv_listbox.winfo_exists():
+                    self._dlg_inv_listbox.delete(0, tk.END)
+                    for item in inventory:
+                        eq_str = "[E] " if item.get("is_equipped") else "    "
+                        name_zh = _zh_item(item["name"])
+                        en = item.get("enchant", 0)
+                        en_str = f"+{en} " if en > 0 else ""
+                        self._dlg_inv_listbox.insert(tk.END, f"{eq_str}{en_str}{name_zh:<14} x{item['count']}")
+            except Exception:
+                pass
 
     def _update_monsters(self, monsters: list, active_target) -> None:
         """Diff-update monster listbox if UIDs changed."""
@@ -820,6 +868,100 @@ class PlayerWindow:
         btn_frame.pack(fill=tk.X, padx=10, pady=(4, 10))
         ttk.Button(btn_frame, text="關閉", command=dialog.destroy).pack(side=tk.RIGHT)
 
+    def _toggle_inventory_dialog(self) -> None:
+        """Toggle or focus dedicated inventory dialog."""
+        if hasattr(self, "_inv_dialog") and self._inv_dialog is not None:
+            try:
+                if self._inv_dialog.winfo_exists():
+                    self._inv_dialog.lift()
+                    self._inv_dialog.focus_force()
+                    return
+            except Exception:
+                pass
+        self._show_inventory_dialog()
+
+    def _show_inventory_dialog(self) -> None:
+        """Displays floating dedicated inventory dialog with full items and weight status."""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("角色道具背包 (Inventory)")
+        dialog.geometry("420x500")
+        dialog.minsize(360, 420)
+        dialog.transient(self.root)
+        dialog.configure(bg="#0f0f1a")
+        self._inv_dialog = dialog
+
+        snap = self.vm.snapshot
+
+        # Top summary header
+        top_frame = tk.Frame(dialog, bg="#1a1a2e", padx=10, pady=8)
+        top_frame.pack(fill=tk.X, padx=8, pady=(8, 4))
+
+        tk.Label(top_frame, text=f"金幣: {snap.adena:,}", font=("Consolas", 11, "bold"),
+                 bg="#1a1a2e", fg="#ffd700").pack(anchor=tk.W)
+
+        # Weight progress bar
+        w_sub = tk.Frame(top_frame, bg="#1a1a2e")
+        w_sub.pack(fill=tk.X, pady=(4, 0))
+        tk.Label(w_sub, text="負重:", font=("Helvetica", 9), bg="#1a1a2e", fg="#aaaadd").pack(side=tk.LEFT)
+        dlg_w_canvas = tk.Canvas(w_sub, height=10, bg="#111122", highlightthickness=0)
+        dlg_w_canvas.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
+        dlg_w_lbl = tk.Label(w_sub, text=f"{snap.weight_pct}% ({snap.weight_30_bar}/29)",
+                             font=("Consolas", 9), bg="#1a1a2e", fg="#ffaa88")
+        dlg_w_lbl.pack(side=tk.RIGHT)
+
+        w_ratio = min(1.0, snap.weight_pct / 100.0)
+        w_color = "#00cc44" if snap.weight_pct < 50 else ("#ffaa00" if snap.weight_pct < 83 else "#ff2222")
+        self._draw_bar(dlg_w_canvas, w_ratio, w_color)
+        self._dlg_w_canvas = dlg_w_canvas
+        self._dlg_w_lbl = dlg_w_lbl
+
+        # Items list frame
+        list_frame = tk.LabelFrame(dialog, text="道具列表 (雙擊使用/穿脫)", bg="#0f0f1a", fg="#ccccff",
+                                   font=("Helvetica", 10, "bold"), padx=8, pady=6)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
+
+        dlg_list = tk.Listbox(
+            list_frame, font=("Consolas", 10),
+            bg="#0d0d1e", fg="#e0e0ff",
+            selectbackground="#334466", selectforeground="#ffffff",
+            activestyle="none"
+        )
+        dlg_scroll = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=dlg_list.yview)
+        dlg_list.configure(yscrollcommand=dlg_scroll.set)
+        dlg_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        dlg_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._dlg_inv_listbox = dlg_list
+
+        def on_dlg_double_click(e=None):
+            sel = dlg_list.curselection()
+            if sel:
+                cur_snap = self.vm.snapshot
+                idx = sel[0]
+                if idx < len(cur_snap.inventory):
+                    it = cur_snap.inventory[idx]
+                    self.vm.manual_toggle_equip(it["item_id"])
+
+        dlg_list.bind("<Double-Button-1>", on_dlg_double_click)
+        dlg_list.bind("<Return>", on_dlg_double_click)
+
+        # Initial populate
+        for item in snap.inventory:
+            eq_str = "[E] " if item.get("is_equipped") else "    "
+            name_zh = _zh_item(item["name"])
+            en = item.get("enchant", 0)
+            en_str = f"+{en} " if en > 0 else ""
+            dlg_list.insert(tk.END, f"{eq_str}{en_str}{name_zh:<14} x{item['count']}")
+
+        # Bottom buttons
+        btn_frame = tk.Frame(dialog, bg="#0f0f1a", padx=8, pady=6)
+        btn_frame.pack(fill=tk.X, padx=8, pady=(2, 6))
+        ttk.Button(btn_frame, text="使用 / 穿脫", command=on_dlg_double_click,
+                   style="Action.TButton").pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(btn_frame, text="裝備總覽", command=self._show_character_status_dialog,
+                   style="Action.TButton").pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_frame, text="關閉 (Esc)", command=dialog.destroy).pack(side=tk.RIGHT)
+        dialog.bind("<Escape>", lambda e: dialog.destroy())
+
 
     def _on_change_destination(self) -> None:
         """Open destination selection dialog."""
@@ -861,7 +1003,10 @@ class PlayerWindow:
         self.vm.set_speed(speed)
 
     def _on_key_press(self, event) -> None:
-        """WASD keyboard movement."""
+        """WASD movement and I/B inventory toggle."""
+        if event.char in ("i", "I", "b", "B"):
+            self._toggle_inventory_dialog()
+            return
         key_heading = {"w": 0, "a": 6, "s": 4, "d": 2,
                        "W": 0, "A": 6, "S": 4, "D": 2}
         heading = key_heading.get(event.char)
@@ -882,6 +1027,11 @@ class PlayerWindow:
         self._canvas_active = False
         self._hud_active = False
         self._log_active = False
+        if hasattr(self, "_inv_dialog") and self._inv_dialog is not None:
+            try:
+                self._inv_dialog.destroy()
+            except Exception:
+                pass
         self.runtime.stop_background()
         self.root.destroy()
 
